@@ -16,7 +16,8 @@ A typed actor library.
 * Run on any executor including scala's ExecutionContext.
 
 A user's guide will come.  
-Here are some [slides for a scalasyd talk](http://notes.localdomain/Actor_Discussion.html)
+Here are some 
+[slides for a scalasyd talk](http://notes.langdale.com.au/Actor_Discussion.html)
 explaining the movition behind this library.  
 
 @a4dev
