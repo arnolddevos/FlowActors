@@ -1,2 +1,5 @@
 target
 trace.dot
+.classpath
+.project
+.settings

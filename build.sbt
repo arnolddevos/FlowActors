@@ -1,6 +1,6 @@
-name := "Snippets"
+name := "FlowActors"
 
 organization := "au.com.langdale"
 
-version := "3.1-SNAPSHOT"
+version := "0.2"
 
