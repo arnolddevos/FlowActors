@@ -43,7 +43,7 @@ trait FlowPrimitives { this: FlowTrace with FlowExecutor =>
         }
       }
       
-      def bar = waiters.mutate {
+      def bar(k: Task => Unit) = waiters.mutate {
         case Nil => barrier
         case ks => k :: ks
       } == Nil
@@ -65,7 +65,7 @@ trait FlowPrimitives { this: FlowTrace with FlowExecutor =>
           n
       }
       
-      if( bar ) {
+      if( bar(k) ) {
         run(k)
         val ks = unbar
         if( ks ne barrier)
@@ -84,9 +84,9 @@ trait FlowPrimitives { this: FlowTrace with FlowExecutor =>
       execute( new Runnable {
         def run() {
           implicit def t = child
-	      trace("starts")
-	      k(t)
-	      trace("completed")
+          trace("starts")
+          k(t)
+          trace("completed")
         }
       })
       child
