@@ -9,7 +9,7 @@ trait FlowImpl extends FlowPrimitives with FlowQueueing { this: Flow with FlowTr
   trait InputChannel[-Message] extends InputOps[Message] with Connection[Message]
   trait OutputChannel[+Message] extends OutputOps[Message]
 
-  final class Actor extends ActorOps with PrimitiveActor { actor =>
+  trait Site extends SiteOps with PrimitiveActor { site =>
     
     val channelCount = new AtomicInteger
     
@@ -33,7 +33,7 @@ trait FlowImpl extends FlowPrimitives with FlowQueueing { this: Flow with FlowTr
     }
     
     private case class Stop() extends Action {
-      private[async] def dispatch()(implicit t: Task) { trace(actor, "=>", "Stop")}
+      private[async] def dispatch()(implicit t: Task) { trace(site, "=>", "Stop")}
     }
 
     final class Input[Message](d: Int) extends InputReactor[Message] with InputChannel[Message] with Queueing[Message] {
@@ -101,29 +101,32 @@ trait FlowImpl extends FlowPrimitives with FlowQueueing { this: Flow with FlowTr
         
     def input[Message]( buffer: Int ): InputReactor[Message] with InputChannel[Message] = new Input[Message](buffer)
     def output[Message](): OutputReactor[Message] with OutputChannel[Message] = new Output[Message]
-    val error = Output[(Actor, Throwable)]()
+    val error = output[(Reference, Throwable)]()
     
     def stop: Action = Stop()
+
+    val reference: Reference
     
     private def runStep( step: => Action )(implicit t: Task) = spawn { implicit t => 
       val a = try { 
-        trace(actor, "=>", "Step")
+        trace(site, "=>", "Step")
         step 
       }
       catch { 
         case NonFatal(e) => 
-          trace("error", actor, "uncaught exception", e)
-          error(actor, e) { stop }
+          trace("error", site, "uncaught exception", e)
+          error(reference, e) { stop }
       }
       
       enqueue(implicit t => a.dispatch())
     } 
     
-    def run(step: => Action, instances: Int) = request { implicit t => 
-      trace(actor, "=>", "Run")
+    def inject(step: => Action, instances: Int) = request { implicit t => 
+      trace(site, "=>", "Run")
       for( i <- 1 to instances) runStep { step }
     }
   }
 
-  def actor() = new Actor
+  def site[R](ref: R): Site { type Reference = R } = new Site { type Reference = R; val reference = ref }
+  def site(): Site { type Reference = Site } = new Site { type Reference = Site; val reference = this }
 }

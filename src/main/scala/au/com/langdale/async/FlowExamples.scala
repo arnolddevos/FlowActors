@@ -16,23 +16,21 @@ object FlowExamples {
   
   def example {
     object A extends Actor {
+
+      val data = input[Int]()
+      val results = output[Double]()
       
-      val data = Input[Int]()
-      val results = Output[Double]()
-      
-      def main: Action = data react { i =>
+      def act = data react { i =>
         
         results(if( i < 100) log10(100.0-i) else throw new IllegalArgumentException("Value out of range: " + i)) {
-          main
+          act
         }
       }
-      
-      run(main, 1)
     }
   
     object B extends Actor {
-      
-      val data = Output[Int]()
+
+      val data = output[Int]()
       
       def main(i: Int): Action = {
         println("// generating " + i)
@@ -45,19 +43,20 @@ object FlowExamples {
         }
       }
       
-      run(main(0), 1)
+      def act = main(0)
     }
     
     object C extends Actor {
-      val data = Input[Any]()
+
+      val data = input[Any]()
       
-      def main: Action = data react {
+      def act: Action = data react {
         t => println("// " + t)
-        main
+        act
       }
-      
-      run(main)
     }
+
+    A.start; B.start; C.start
     
     println("digraph {")
   

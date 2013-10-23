@@ -18,9 +18,21 @@ trait Flow {
     def disconnect: Unit
   }
 
-  type Actor <: ActorOps
+  trait Actor { 
+    protected val self = site(this)
+    def input[Message]( buffer: Int = 1) = self.input[Message](buffer)
+    def output[Message]() = self.output[Message]()
+    def stop = self.stop
+    def error = self.error
+    def start = self.inject(act())
 
-  trait ActorOps {
+    type Action = self.Action
+    protected def act(): Action
+  }
+
+  type Site <: SiteOps
+
+  trait SiteOps {
 
     type Action 
     type InputAction <: Action with ActionCombinator
@@ -43,14 +55,16 @@ trait Flow {
     def output[Message](): OutputReactor[Message] with OutputChannel[Message]
     
     // ways to stop: the error channel and stop action
-    def error: OutputReactor[(Actor, Throwable)] with OutputChannel[(Actor, Throwable)]
+    type Reference
+    def error: OutputReactor[(Reference, Throwable)] with OutputChannel[(Reference, Throwable)]
     def stop: Action
 
     // method to run this actor 
-    def run(step: => Action, instances: Int = 1): Unit
+    def inject(step: => Action, instances: Int = 1): Unit
   }
 
-  def actor(): Actor
+  def site[R](ref: R): Site { type Reference = R }
+  def site(): Site { type Reference = Site }
 }
 
 object Flow extends Flow with FlowImpl with FlowExecutor.ForkJoin with FlowTrace.Graphviz
