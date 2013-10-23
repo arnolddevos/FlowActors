@@ -5,18 +5,20 @@ import language.higherKinds
 trait Flow {
 
   type InputChannel[-Message] <: InputOps[Message]
-  type OutputChannel[+Message] <: OutputOps[Message]
-  type Actor <: ActorOps
 
   trait InputOps[-Message] {
     def !(m: Message): Unit
     def buffer(n: Int): Unit
   }
 
+  type OutputChannel[+Message] <: OutputOps[Message]
+
   trait OutputOps[+Message] { 
     def -->[M >: Message]( c: InputChannel[M]): Unit
     def disconnect: Unit
   }
+
+  type Actor <: ActorOps
 
   trait ActorOps {
 
@@ -37,8 +39,8 @@ trait Flow {
     }
 
     // methods to create channels
-    def Input[Message]( buffer: Int = 1): InputReactor[Message] with InputChannel[Message]
-    def Output[Message](): OutputReactor[Message] with OutputChannel[Message]
+    def input[Message]( buffer: Int = 1): InputReactor[Message] with InputChannel[Message]
+    def output[Message](): OutputReactor[Message] with OutputChannel[Message]
     
     // ways to stop: the error channel and stop action
     def error: OutputReactor[(Actor, Throwable)] with OutputChannel[(Actor, Throwable)]
@@ -47,6 +49,8 @@ trait Flow {
     // method to run this actor 
     def run(step: => Action, instances: Int = 1): Unit
   }
+
+  def actor(): Actor
 }
 
 object Flow extends Flow with FlowImpl with FlowExecutor.ForkJoin with FlowTrace.Graphviz

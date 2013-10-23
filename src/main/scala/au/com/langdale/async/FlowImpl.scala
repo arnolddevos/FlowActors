@@ -9,7 +9,7 @@ trait FlowImpl extends FlowPrimitives with FlowQueueing { this: Flow with FlowTr
   trait InputChannel[-Message] extends InputOps[Message] with Connection[Message]
   trait OutputChannel[+Message] extends OutputOps[Message]
 
-  trait Actor extends ActorOps with PrimitiveActor { actor =>
+  final class Actor extends ActorOps with PrimitiveActor { actor =>
     
     val channelCount = new AtomicInteger
     
@@ -36,7 +36,7 @@ trait FlowImpl extends FlowPrimitives with FlowQueueing { this: Flow with FlowTr
       private[async] def dispatch()(implicit t: Task) { trace(actor, "=>", "Stop")}
     }
 
-    class Input[Message](d: Int) extends InputReactor[Message] with InputChannel[Message] with Queueing[Message] {
+    final class Input[Message](d: Int) extends InputReactor[Message] with InputChannel[Message] with Queueing[Message] {
       val channelId = channelCount.incrementAndGet
       override def toString = "Input(" + actorId + "." + channelId + ")"
       
@@ -76,7 +76,7 @@ trait FlowImpl extends FlowPrimitives with FlowQueueing { this: Flow with FlowTr
       }
     } 
     
-    class Output[Message] extends OutputReactor[Message] with OutputChannel[Message] with Wiring[Message] {
+    final class Output[Message] extends OutputReactor[Message] with OutputChannel[Message] with Wiring[Message] {
       val channelId = channelCount.incrementAndGet
       override def toString = "Output(" + actorId + "." + channelId + ")"
       
@@ -99,8 +99,8 @@ trait FlowImpl extends FlowPrimitives with FlowQueueing { this: Flow with FlowTr
       }
     }
         
-    def Input[Message]( buffer: Int ): InputReactor[Message] with InputChannel[Message] = new Input[Message](buffer)
-    def Output[Message](): OutputReactor[Message] with OutputChannel[Message] = new Output[Message]
+    def input[Message]( buffer: Int ): InputReactor[Message] with InputChannel[Message] = new Input[Message](buffer)
+    def output[Message](): OutputReactor[Message] with OutputChannel[Message] = new Output[Message]
     val error = Output[(Actor, Throwable)]()
     
     def stop: Action = Stop()
@@ -124,4 +124,6 @@ trait FlowImpl extends FlowPrimitives with FlowQueueing { this: Flow with FlowTr
       for( i <- 1 to instances) runStep { step }
     }
   }
+
+  def actor() = new Actor
 }
