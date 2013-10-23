@@ -6,12 +6,12 @@ import scala.util.control.NonFatal
 
 trait FlowImpl extends FlowPrimitives with FlowQueueing { this: Flow with FlowTrace with FlowExecutor =>
 
-  trait InputChannel[-Message] extends InputOps[Message] with Connection[Message]
-  trait OutputChannel[+Message] extends OutputOps[Message]
+  trait InputPort[-Message] extends InputOps[Message] with Connection[Message]
+  trait OutputPort[+Message] extends OutputOps[Message]
 
   trait Site extends SiteOps with PrimitiveActor { site =>
     
-    val channelCount = new AtomicInteger
+    val portCount = new AtomicInteger
     
     trait Action {
       private[async] def dispatch()(implicit t: Task): Unit
@@ -36,9 +36,9 @@ trait FlowImpl extends FlowPrimitives with FlowQueueing { this: Flow with FlowTr
       private[async] def dispatch()(implicit t: Task) { trace(site, "=>", "Stop")}
     }
 
-    final class Input[Message](d: Int) extends InputReactor[Message] with InputChannel[Message] with Queueing[Message] {
-      val channelId = channelCount.incrementAndGet
-      override def toString = "Input(" + actorId + "." + channelId + ")"
+    final class Input[Message](d: Int) extends InputReactor[Message] with InputPort[Message] with Queueing[Message] {
+      val portId = portCount.incrementAndGet
+      override def toString = "Input(" + actorId + "." + portId + ")"
       
       private var depth = d
       private var _state: State = Idle
@@ -76,9 +76,9 @@ trait FlowImpl extends FlowPrimitives with FlowQueueing { this: Flow with FlowTr
       }
     } 
     
-    final class Output[Message] extends OutputReactor[Message] with OutputChannel[Message] with Wiring[Message] {
-      val channelId = channelCount.incrementAndGet
-      override def toString = "Output(" + actorId + "." + channelId + ")"
+    final class Output[Message] extends OutputReactor[Message] with OutputPort[Message] with Wiring[Message] {
+      val portId = portCount.incrementAndGet
+      override def toString = "Output(" + actorId + "." + portId + ")"
       
       private var _state: State = Disconnected
       def state_=(s: State)(implicit t: Task) { _state = s; trace(this, "=>", s)}
@@ -90,7 +90,7 @@ trait FlowImpl extends FlowPrimitives with FlowQueueing { this: Flow with FlowTr
         }
       }
       
-      def -->[M >: Message]( c: InputChannel[M]): Unit = request { implicit t =>
+      def -->[M >: Message]( c: InputPort[M]): Unit = request { implicit t =>
         state = state.transition(c)
       }
         
@@ -99,8 +99,8 @@ trait FlowImpl extends FlowPrimitives with FlowQueueing { this: Flow with FlowTr
       }
     }
         
-    def input[Message]( buffer: Int ): InputReactor[Message] with InputChannel[Message] = new Input[Message](buffer)
-    def output[Message](): OutputReactor[Message] with OutputChannel[Message] = new Output[Message]
+    def input[Message]( buffer: Int ): InputReactor[Message] with InputPort[Message] = new Input[Message](buffer)
+    def output[Message](): OutputReactor[Message] with OutputPort[Message] = new Output[Message]
     val error = output[(Reference, Throwable)]()
     
     def stop: Action = Stop()

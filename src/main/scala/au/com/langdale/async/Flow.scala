@@ -4,17 +4,17 @@ import language.higherKinds
 
 trait Flow {
 
-  type InputChannel[-Message] <: InputOps[Message]
+  type InputPort[-Message] <: InputOps[Message]
 
   trait InputOps[-Message] {
     def !(m: Message): Unit
     def buffer(n: Int): Unit
   }
 
-  type OutputChannel[+Message] <: OutputOps[Message]
+  type OutputPort[+Message] <: OutputOps[Message]
 
   trait OutputOps[+Message] { 
-    def -->[M >: Message]( c: InputChannel[M]): Unit
+    def -->[M >: Message]( c: InputPort[M]): Unit
     def disconnect: Unit
   }
 
@@ -50,13 +50,13 @@ trait Flow {
       def apply( m: Message)( step: => Action ): Action 
     }
 
-    // methods to create channels
-    def input[Message]( buffer: Int = 1): InputReactor[Message] with InputChannel[Message]
-    def output[Message](): OutputReactor[Message] with OutputChannel[Message]
+    // methods to create Ports
+    def input[Message]( buffer: Int = 1): InputReactor[Message] with InputPort[Message]
+    def output[Message](): OutputReactor[Message] with OutputPort[Message]
     
-    // ways to stop: the error channel and stop action
+    // ways to stop: the error Port and stop action
     type Reference
-    def error: OutputReactor[(Reference, Throwable)] with OutputChannel[(Reference, Throwable)]
+    def error: OutputReactor[(Reference, Throwable)] with OutputPort[(Reference, Throwable)]
     def stop: Action
 
     // method to run this actor 
