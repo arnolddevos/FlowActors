@@ -32,7 +32,7 @@ trait FlowPrimitives { this: FlowTrace with FlowExecutor =>
     
     private val waiters = new CheckedVar[List[Task => Unit]](Nil)
     
-    def enqueue(k: Task => Unit)(implicit t: Task) {
+    def enqueue(k: Task => Unit)(implicit t: Task): Unit = {
       
       def run(k: Task => Unit)(implicit t: Task) {
         try {
@@ -70,8 +70,9 @@ trait FlowPrimitives { this: FlowTrace with FlowExecutor =>
         val ks = unbar
         if( ks ne barrier)
           spawn { implicit t => 
+            trace(actor, "background", "start")
             val n = service(0, ks) 
-            trace(actor, "service", "completed", n, "actions")
+            trace(actor, "background", "end", n, "actions")
           }
       }
     }

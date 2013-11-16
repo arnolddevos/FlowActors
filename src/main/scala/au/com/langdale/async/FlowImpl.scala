@@ -1,113 +1,31 @@
 package au.com.langdale
 package async
 
-import java.util.concurrent.atomic.AtomicInteger
 import scala.util.control.NonFatal
 
 trait FlowImpl extends FlowPrimitives with FlowQueueing { this: Flow with FlowTrace with FlowExecutor =>
 
-  trait InputPort[-Message] extends InputOps[Message] with Connection[Message]
-  trait OutputPort[+Message] extends OutputOps[Message]
+  def createSite(process: Process) = new Site(process)
 
-  trait Site extends SiteOps with PrimitiveActor { site =>
-    
-    val portCount = new AtomicInteger
-    
-    trait Action {
-      private[async] def dispatch()(implicit t: Task): Unit
-    }
-    
-    trait InputAction extends Action with ActionCombinator {
-      def orElse( other: InputAction ): InputAction = new Alternatives(this, other)
-      private[async] def dispatch()(implicit t: Task) = dispatchAndCancel(_ => ())
-      private[async] def dispatchAndCancel(bubble: Task => Unit)(implicit t: Task): Unit
-      private[async] def cancel()(implicit t: Task): Unit
-    }
-    
-    private class Alternatives(a: InputAction, b: InputAction) extends InputAction {
-      private[async] def dispatchAndCancel(bubble: Task => Unit)(implicit t: Task) = {
-        a dispatchAndCancel { implicit t => b.cancel(); bubble(t) }
-        b dispatchAndCancel { implicit t => a.cancel(); bubble(t) }
-      }
-      private[async] def cancel()(implicit t: Task) = { a.cancel(); b.cancel() }
-    }
-    
-    private case class Stop() extends Action {
-      private[async] def dispatch()(implicit t: Task) { trace(site, "=>", "Stop")}
+  final class Site(val process: Process) extends SiteOps with PrimitiveActor { site =>
+
+    private[FlowImpl] val inputs = new StateMap with Queueing {
+      type Key[_] = InputPort[_]
     }
 
-    final class Input[Message](d: Int) extends InputReactor[Message] with InputPort[Message] with Queueing[Message] {
-      val portId = portCount.incrementAndGet
-      override def toString = "Input(" + actorId + "." + portId + ")"
-      
-      private var depth = d
-      private var _state: State = Idle
-      def state_=(s: State)(implicit t: Task) { _state = s; trace(this, "=>", s)}
-      def state = _state
-      
-      def !(m: Message): Unit = request { implicit t => 
-        state = state.transition(t => m, depth) 
-      }
-      
-      private[async] def send(mk: MK[Message])(implicit t: Task) = enqueue { implicit t =>
-        state = state.transition(mk, depth)
-      }
-      
-      def apply( f: Message => Action): InputAction = new InputAction with CancelRef {
-        override def toString = "Action on " + Input.this
-        
-        private[async] def dispatchAndCancel(bubble: Task => Unit)(implicit t: Task) = {
-          state = state.transition(this){ implicit t => m =>
-            enqueue { implicit t =>
-              bubble(t)  
-              runStep { f(m) }
-            }
-          } 
-        }
-        
-        private[async] def cancel()(implicit t: Task) = {
-          state = state.cancel(this)
-        }
-      }
-      
-      def buffer(d: Int) = request { implicit t =>
-        depth = d
-        state = state.transition(d)
-      }
-    } 
-    
-    final class Output[Message] extends OutputReactor[Message] with OutputPort[Message] with Wiring[Message] {
-      val portId = portCount.incrementAndGet
-      override def toString = "Output(" + actorId + "." + portId + ")"
-      
-      private var _state: State = Disconnected
-      def state_=(s: State)(implicit t: Task) { _state = s; trace(this, "=>", s)}
-      def state = _state
-      
-      def apply( m: Message)( k: => Action): Action = new Action {
-        private[async] def dispatch()(implicit t: Task) = {
-          state = state.transition(implicit t => { runStep(k); m })
-        }
-      }
-      
-      def -->[M >: Message]( c: InputPort[M]): Unit = request { implicit t =>
-        state = state.transition(c)
-      }
-        
-      def disconnect: Unit = request { implicit t =>
-        state = state.transition()
-      }
+    private[FlowImpl] val outputs = new StateMap with Wiring {
+      type Key[_] = OutputPort[_]
     }
-        
-    def input[Message]( buffer: Int ): InputReactor[Message] with InputPort[Message] = new Input[Message](buffer)
-    def output[Message](): OutputReactor[Message] with OutputPort[Message] = new Output[Message]
-    val error = output[(Reference, Throwable)]()
-    
-    def stop: Action = Stop()
 
-    val reference: Reference
-    
-    private def runStep( step: => Action )(implicit t: Task) = spawn { implicit t => 
+    /** create a connection to this site */
+    private[FlowImpl] def connection[Message](label: InputPort[Message]): Connection[Message] = 
+      new Connection[Message] {
+        def send(mk: MK[Message])(implicit t: Task): Unit =  enqueue { implicit t =>
+          inputs(label) { inputs.transition(mk) }
+        }
+      }
+
+    private[FlowImpl] def runStep( step: => Action )(implicit t: Task) = spawn { implicit t => 
       val a = try { 
         trace(site, "=>", "Step")
         step 
@@ -115,18 +33,119 @@ trait FlowImpl extends FlowPrimitives with FlowQueueing { this: Flow with FlowTr
       catch { 
         case NonFatal(e) => 
           trace("error", site, "uncaught exception", e)
-          error(reference, e) { stop }
+          output(supervisor, (this, e))(stop)
       }
       
-      enqueue(implicit t => a.dispatch())
+      enqueue(implicit t => a.dispatch(this))
     } 
     
-    def inject(step: => Action, instances: Int) = request { implicit t => 
+    /** inject an action into the site */
+    def run(step: => Action, instances: Int) = request { implicit t => 
       trace(site, "=>", "Run")
       for( i <- 1 to instances) runStep { step }
     }
+      
+    /** change buffering depth */  
+    def buffer[Message]( label: InputPort[Message], depth: Int): Unit = request { implicit t =>
+      inputs(label) { inputs.transition(depth) }
+    }
+
+    /** Connect an output port to an input port */
+    def connect[Message]( labelA: OutputPort[Message], siteB: Site, labelB: InputPort[Message]): Unit = {
+      request { implicit t =>
+        outputs(labelA) { outputs.transition( siteB.connection(labelB)) }
+      }
+    }
+
+    /** disconnect an output */
+    def disconnect[Message](label: OutputPort[Message]): Unit = request { implicit t =>
+      outputs(label) { outputs.transition[Message]() }
+    }
   }
 
-  def site[R](ref: R): Site { type Reference = R } = new Site { type Reference = R; val reference = ref }
-  def site(): Site { type Reference = Site } = new Site { type Reference = Site; val reference = this }
+  /** Create an input action */
+  def input[Message]( label: InputPort[Message])( step: Message => Action ): InputAction = 
+    new BasicInputAction(label)(step)
+
+  /** Create an output action */
+  def output[Message]( label: OutputPort[Message], m: Message)( step: => Action ): Action = 
+    new OutputAction(label, m)(step)
+  
+  /** Fork another thread of control */
+  def fork( step1: => Action )( step2: => Action ): Action =
+    new Fork(step1, step2)
+
+  /** create a stop action */
+  def stop: Action = Stop()
+
+  sealed trait Action {
+    private[FlowImpl] def dispatch(site: Site)(implicit t: Task): Unit
+  }
+  
+  sealed trait InputAction extends Action with ActionCombinator {
+    def orElse( other: InputAction ): InputAction = new Alternatives(this, other)
+  }
+
+  private class OutputAction[Message]( label: OutputPort[Message], m: Message)( step: => Action ) extends Action {
+    private[FlowImpl] def dispatch(site: Site)(implicit t: Task) = { import site._
+      outputs(label) { outputs.transition(implicit t => { runStep(step); m })}
+    }
+  }
+
+  private class BasicInputAction[Message]( label: InputPort[Message])( step: Message => Action ) 
+    extends InputAction with CancelRef { id: CancelRef =>
+    
+    private[FlowImpl] def dispatch(site: Site)(implicit t: Task) = dispatchLater(site, () => ())
+    
+    def dispatchLater(site: Site, cancel: () => Unit)(implicit t: Task) = { import site._
+      inputs(label) { 
+        inputs.transition[Message](id){ implicit t => m =>
+          cancel(); runStep { step(m) }
+        }
+      }
+    }
+
+    def dispatchNow(site: Site)(implicit t: Task): Boolean = { import site._
+      inputs.run(label) { 
+        inputs.transitionMaybe[Message]{ implicit t => m =>
+          runStep { step(m) }
+        }
+      }
+    }
+    
+    def cancel(site: Site)(implicit t: Task) = { import site._
+      inputs(label) { inputs.cancel(id) }
+    }
+  }
+  
+  private case class Alternatives(a1: InputAction, a2: InputAction) extends InputAction {
+
+    final def exists(a: InputAction=this)(f: BasicInputAction[_] => Boolean): Boolean = a match {
+      case a: BasicInputAction[_] => f(a)
+      case Alternatives(a1, a2) => exists(a1)(f) || exists(a2)(f)
+    }
+    
+    final def foreach(a: InputAction=this)(f: BasicInputAction[_] => Unit): Unit = a match {
+      case a: BasicInputAction[_] => f(a)
+      case Alternatives(a1, a2) => foreach(a1)(f); foreach(a2)(f)
+    }
+    
+    private[FlowImpl] def dispatch(site: Site)(implicit t: Task): Unit = {
+      val done = exists()(_.dispatchNow(site))
+      if( ! done ) {
+        val cancel = () => foreach() { _.cancel(site) }
+        foreach() { _.dispatchLater(site, cancel) }
+      }
+    }
+  }
+
+  private class Fork( step1: => Action, step2: => Action ) extends Action {
+    private[FlowImpl] def dispatch(site: Site)(implicit t: Task): Unit = { import site._
+      runStep(step1); runStep(step2)
+    }
+  }
+  
+  private case class Stop() extends Action {
+    private[FlowImpl] def dispatch(site: Site)(implicit t: Task) { trace(site, "=>", "Stop")}
+  }
 }

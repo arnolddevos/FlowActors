@@ -1,12 +1,11 @@
 package au.com.langdale
 package async
 
-import Flow._
 import math._
 import java.io.FileOutputStream
 import java.util.concurrent.ForkJoinPool
 
-object FlowExamples {
+object FlowExamples extends FlowGraph with FlowImpl with FlowGraphImpl with FlowExecutor.ForkJoin with FlowTrace.Graphviz {
     
   def main(args: Array[String]) {  
     Console.withOut(new FileOutputStream("trace.dot")) {
@@ -15,60 +14,63 @@ object FlowExamples {
   }
   
   def example {
-    object A extends Actor {
+    val data = label[Int]
+    val results = label[Double]
+    val logging = label[Any]
 
-      val data = input[Int]()
-      val results = output[Double]()
-      
-      def act = data react { i =>
+    object A extends Process {
+      def description = "Convert Ints to Doubles"
+
+      def action = loop
+
+      def loop: Action = input(data) { i =>
+
+        def converted = 
+          if( i < 100) log10(100.0-i) 
+          else throw new IllegalArgumentException("Value out of range: " + i)
         
-        results(if( i < 100) log10(100.0-i) else throw new IllegalArgumentException("Value out of range: " + i)) {
-          act
+        output(results, converted) {
+          loop
         }
       }
     }
   
-    object B extends Actor {
+    object B extends Process {
+      def description = "generate a stream of Ints"
+     
+      def action = loop(0)
 
-      val data = output[Int]()
-      
-      def main(i: Int): Action = {
+      def loop(i: Int): Action = {
         println("// generating " + i)
-        data(i) {
+        output(data, i) {
           if(i < 400)
-            main(i+1)
+            loop(i+1)
           else {
             stop
           }
         }
       }
-      
-      def act = main(0)
     }
     
-    object C extends Actor {
+    object C extends Process {
 
-      val data = input[Any]()
-      
-      def act: Action = data react {
+      def description = "prints what is sent on logging"
+
+      def action = loop
+
+      def loop: Action = input(logging) {
         t => println("// " + t)
-        act
+        loop
       }
     }
 
-    A.start; B.start; C.start
+    val graph = 
+      B :-data:-> A :-results/logging:-> C & 
+      (A & B) :-supervisor/logging:-> C 
     
     println("digraph {")
-  
-    // B.data --> Logger.data
-    B.data --> A.data
-    Thread.sleep(5)
-    
-    B.error --> C.data
-    A.error --> C.data
-    A.results --> C.data
+    run(graph)
     Thread.sleep(3000l)
-    
     println(executorStats())
     println("}")
   }

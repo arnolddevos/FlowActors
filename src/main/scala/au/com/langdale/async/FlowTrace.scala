@@ -59,7 +59,7 @@ object FlowTrace {
         case Seq(s1, "=>", s2) if t.majorId == 0 => note(anchor=false) 
         case Seq(s1, "=>", s2)  => note() 
         case Seq("error", _ @_*) => note(atts=attr("fontcolor", "red"))
-        case Seq(_, "service", _ @_*) => note()
+        case Seq(_, "background", _ @_*) => note()
         case _ => "// " + t + ": " + xs.mkString(" ")
       }
       
