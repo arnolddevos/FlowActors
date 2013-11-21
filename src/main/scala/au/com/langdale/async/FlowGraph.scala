@@ -103,9 +103,19 @@ trait FlowGraph extends Flow with GraphDSL {
 
   /** A base trait for a process to execute at a Site */
   trait Process {
-    override def toString = "Process("+description+")"
+    override def toString = s"Process($description)"
     def description: String
     def action: Action 
+    def *(n: Int) = Parallel(this, n)
+  }
+
+  case class Parallel(underlying: Process, factor: Int) extends Process {
+    override def toString = s"$underlying*$factor"
+    def description = underlying.description
+    def action = loop(factor)
+    private def loop(n: Int): Action = 
+      if(n > 0) fork(underlying.action) { loop(n-1) }
+      else stop
   }
 
   def action(process: Process) = process.action
