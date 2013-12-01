@@ -3,7 +3,7 @@ package async
 
 import scala.util.control.NonFatal
 
-trait FlowImpl extends FlowPrimitives with FlowQueueing { this: Flow with FlowTrace with FlowExecutor =>
+trait FlowImpl extends Flow with FlowPrimitives with FlowQueueing { this: FlowTrace with FlowExecutor =>
 
   def createSite(process: Process) = new Site(process)
 
