@@ -137,7 +137,7 @@ trait FlowGraphImpl { this: FlowGraph =>
     sites0 => 
       val (sites1, site1) = update(sites0)(node1, createSite(node1))
       val (sites2, site2) = update(sites1)(node2, createSite(node2))
-      site1.connect(port1, site2, port2)
+      site1.connect(port1, site2, port2, site1.fanout(port1))
       sites2
   }
 

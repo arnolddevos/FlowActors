@@ -14,7 +14,7 @@ trait FlowImpl extends FlowPrimitives with FlowQueueing { this: Flow with FlowTr
     }
 
     private[FlowImpl] val outputs = new StateMap with Wiring {
-      type Key[_] = OutputPort[_]
+      type Key[_] = (OutputPort[_], Int)
     }
 
     /** create a connection to this site */
@@ -33,7 +33,7 @@ trait FlowImpl extends FlowPrimitives with FlowQueueing { this: Flow with FlowTr
       catch { 
         case NonFatal(e) => 
           trace("error", site, "uncaught exception", e)
-          output(supervisor, (this, e))(stop)
+          output(supervisor, (this, e), 0)(stop)
       }
       
       enqueue(implicit t => a.dispatch(this))
@@ -51,16 +51,18 @@ trait FlowImpl extends FlowPrimitives with FlowQueueing { this: Flow with FlowTr
     }
 
     /** Connect an output port to an input port */
-    def connect[Message]( labelA: OutputPort[Message], siteB: Site, labelB: InputPort[Message]): Unit = {
+    def connect[Message]( labelA: OutputPort[Message], siteB: Site, labelB: InputPort[Message], n: Int): Unit = {
       request { implicit t =>
-        outputs(labelA) { outputs.transition( siteB.connection(labelB)) }
+        outputs(labelA, n) { outputs.transition( siteB.connection(labelB)) }
       }
     }
 
     /** disconnect an output */
-    def disconnect[Message](label: OutputPort[Message]): Unit = request { implicit t =>
-      outputs(label) { outputs.transition[Message]() }
+    def disconnect[Message](label: OutputPort[Message], n: Int): Unit = request { implicit t =>
+      outputs(label, n) { outputs.transition[Message]() }
     }
+
+    def fanout[Message](label: OutputPort[Message]): Int = outputs.keys.filter( _._1 == label ).size
   }
 
   /** Create an input action */
@@ -68,8 +70,8 @@ trait FlowImpl extends FlowPrimitives with FlowQueueing { this: Flow with FlowTr
     new BasicInputAction(label)(step)
 
   /** Create an output action */
-  def output[Message]( label: OutputPort[Message], m: Message)( step: => Action ): Action = 
-    new OutputAction(label, m)(step)
+  def output[Message]( label: OutputPort[Message], m: Message, n: Int)( step: => Action ): Action = 
+    new OutputAction(label, n: Int, m)(step)
   
   /** Fork another thread of control */
   def fork( step1: => Action )( step2: => Action ): Action =
@@ -86,9 +88,9 @@ trait FlowImpl extends FlowPrimitives with FlowQueueing { this: Flow with FlowTr
     def orElse( other: InputAction ): InputAction = new Alternatives(this, other)
   }
 
-  private class OutputAction[Message]( label: OutputPort[Message], m: Message)( step: => Action ) extends Action {
+  private class OutputAction[Message]( label: OutputPort[Message], n: Int, m: Message)( step: => Action ) extends Action {
     private[FlowImpl] def dispatch(site: Site)(implicit t: Task) = { import site._
-      outputs(label) { outputs.transition(implicit t => { runStep(step); m })}
+      outputs(label, n: Int) { outputs.transition(implicit t => { runStep(step); m })}
     }
   }
 

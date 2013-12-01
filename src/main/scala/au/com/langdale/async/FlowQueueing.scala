@@ -52,6 +52,8 @@ trait FlowQueueing { this: FlowTrace =>
       val cell = underlying.asInstanceOf[View[M]].applyOrElse(key, freshCell)
       cell.run(mutation)
     }
+
+    def keys = underlying.keys
   }
   
   trait Wiring {

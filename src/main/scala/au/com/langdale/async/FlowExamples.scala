@@ -3,10 +3,9 @@ package async
 
 import math._
 import java.io.FileOutputStream
-import java.util.concurrent.ForkJoinPool
 
 object FlowExamples extends FlowGraph with FlowImpl with FlowGraphImpl with FlowExecutor.ForkJoin with FlowTrace.Graphviz {
-    
+  
   def main(args: Array[String]) {  
     Console.withOut(new FileOutputStream("trace.dot")) {
       example

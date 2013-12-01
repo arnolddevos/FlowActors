@@ -33,7 +33,7 @@ trait Flow {
   def input[Message]( label: InputPort[Message])( step: Message => Action ): InputAction
 
   /** Create an output action */
-  def output[Message]( label: OutputPort[Message], m: Message)( step: => Action ): Action 
+  def output[Message]( label: OutputPort[Message], m: Message, n: Int = 0)( step: => Action ): Action 
 
   /** Fork another thread of control */
   def fork( step1: => Action )( step2: => Action ): Action
@@ -53,10 +53,13 @@ trait Flow {
     def buffer[Message]( label: InputPort[Message], depth: Int): Unit
 
     /** Connect an output port to an input port */
-    def connect[Message]( label: OutputPort[Message], site: Site, splice: InputPort[Message]): Unit
+    def connect[Message]( label: OutputPort[Message], site: Site, splice: InputPort[Message], n: Int = 0): Unit
 
-    /** disconnect an output */
-    def disconnect[Message](label: OutputPort[Message]): Unit
+    /** Disconnect an output */
+    def disconnect[Message](label: OutputPort[Message], n: Int = 0): Unit
+
+    /** Count of the number of output ports with the given label at some recent instant. */
+    def fanout[Message](label: OutputPort[Message]): Int
 
     /** Inject a new continuation to be dispatched at this site */ 
     def run(step: => Action =action(process), instances: Int = 1): Unit
