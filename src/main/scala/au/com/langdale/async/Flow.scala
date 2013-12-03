@@ -35,6 +35,9 @@ trait Flow {
   /** Create an output action */
   def output[Message]( label: OutputPort[Message], m: Message, n: Int = 0)( step: => Action ): Action 
 
+  /** create an action that depends on a port's fanout */
+  def fanout[Message]( label: OutputPort[Message])(step: Int => Action): Action
+
   /** Fork another thread of control */
   def fork( step1: => Action )( step2: => Action ): Action
 

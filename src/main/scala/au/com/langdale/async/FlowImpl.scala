@@ -72,6 +72,10 @@ trait FlowImpl extends Flow with FlowPrimitives with FlowQueueing { this: FlowTr
   /** Create an output action */
   def output[Message]( label: OutputPort[Message], m: Message, n: Int)( step: => Action ): Action = 
     new OutputAction(label, n: Int, m)(step)
+
+  /** create an action that depends on a port's fanout */
+  def fanout[Message]( label: OutputPort[Message])(step: Int => Action): Action = 
+    new Fanout(label)(step)
   
   /** Fork another thread of control */
   def fork( step1: => Action )( step2: => Action ): Action =
@@ -90,7 +94,13 @@ trait FlowImpl extends Flow with FlowPrimitives with FlowQueueing { this: FlowTr
 
   private class OutputAction[Message]( label: OutputPort[Message], n: Int, m: Message)( step: => Action ) extends Action {
     private[FlowImpl] def dispatch(site: Site)(implicit t: Task) = { import site._
-      outputs(label, n: Int) { outputs.transition(implicit t => { runStep(step); m })}
+      outputs(label, n) { outputs.transition(implicit t => { runStep(step); m })}
+    }
+  }
+
+  private class Fanout[Message]( label: OutputPort[Message] )( step: Int => Action ) extends Action {
+    private[FlowImpl] def dispatch(site: Site)(implicit t: Task) = { 
+      site.runStep(step(site.fanout(label)))
     }
   }
 
