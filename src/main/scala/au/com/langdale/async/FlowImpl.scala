@@ -3,7 +3,7 @@ package async
 
 import scala.util.control.NonFatal
 
-trait FlowImpl extends Flow with FlowPrimitives with FlowQueueing { this: FlowTrace with FlowExecutor =>
+trait FlowImpl extends Flow with Primitives with Queueing { this: Trace with Executor =>
 
   def createSite(process: Process) = new Site(process)
 
@@ -33,7 +33,7 @@ trait FlowImpl extends Flow with FlowPrimitives with FlowQueueing { this: FlowTr
       catch { 
         case NonFatal(e) => 
           trace("error", site, "uncaught exception", e)
-          output(supervisor, (this, e), 0)(stop)
+          output(errors, (this, e), 0)(stop)
       }
       
       enqueue(implicit t => a.dispatch(this))

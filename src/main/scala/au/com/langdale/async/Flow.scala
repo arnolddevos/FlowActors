@@ -2,13 +2,15 @@ package au.com.langdale
 package async
 import language.higherKinds
 
-trait Flow { 
-
-  /** A label for an input port */
-  type InputPort[-Message]
-
-  /** A label for an output port */
-  type OutputPort[+Message]
+/**
+ * The basic API for this library declares Processes composed of Actions 
+ * that run at Sites which have input and output ports.
+ * This can be enhanced by DSLs to construct Processes and graphs of these.
+ *
+ * To use this API, including the DSLs: import au.com.langdale.async.Flow._
+ *
+ */
+trait Flow extends Labels { 
 
   /** Represents something that executes at a site. */
   type Process
@@ -16,8 +18,8 @@ trait Flow {
   /** obtain an action from a process */
   def action(process: Process): Action
 
-  /** The output port label for errors and supervision */
-  def supervisor: OutputPort[(Site, Throwable)]
+  /** The port label for errors and supervision */
+  val errors = label[(Site, Throwable)]
 
   /** A continuation that can be dispatched at a site */
   type Action 
@@ -41,7 +43,7 @@ trait Flow {
   /** Fork another thread of control */
   def fork( step1: => Action )( step2: => Action ): Action
 
-  /** An empty continuation */
+  /** A no-op wih no continuation */
   def stop: Action
 
   /** A site at which messages are processed. */
@@ -72,4 +74,4 @@ trait Flow {
   def createSite(process: Process): Site
 }
 
-object Flow extends FlowGraph with FlowImpl with FlowGraphImpl with FlowExecutor.ForkJoin with FlowTrace.Noop
+object Flow extends Processes with Builder with GraphDSL with Labels.Basic with FlowImpl with Executor.ForkJoin with Trace.Noop

@@ -1,11 +1,16 @@
 package au.com.langdale
 package async
 
-trait FlowFunctions { this: FlowGraph =>
- 
-  def lift[X](e: PortExpr[X])(x: X) = new Process {
-    def description = e.description
-    def action: Action = e.lift(x, action)
+/**
+ *  Operations to lift functions into Actions and attach port labels. 
+ *  This involves a transformation from direct style to continuation passing style.
+ *  A small DSL is used to express the function signature in terms of port labels.
+ */
+trait Actions extends Flow {
+
+  def lift[F](e: Expr[F])(f: F) = {
+    def loop: Action = e.lift(f, loop)
+    loop
   }
 
   def option[Y](expr: OutputExpr[Y]) = new OutputExpr[Option[Y]] {
@@ -52,11 +57,11 @@ trait FlowFunctions { this: FlowGraph =>
     def lift(cont: ((X1, X2)) => Action) = expr1.lift(x1 => expr2.lift(x2 => cont((x1, x2))))
   }
 
-  trait PortExpr[F] { right =>
+  trait Expr[F] { right =>
     def description: String
     def lift(f: F, cont: => Action): Action
 
-    def =>:[X](left: InputExpr[X]) = new PortExpr[X => F] {
+    def =>:[X](left: InputExpr[X]) = new Expr[X => F] {
       def description = s"${left.description} => ${right.description}"
       def lift(f: X => F, cont: => Action) = left.lift(x => right.lift(f(x), cont))
     }
@@ -71,7 +76,7 @@ trait FlowFunctions { this: FlowGraph =>
     def description: String
     def lift(cont: => Action): Y => Action
 
-    def =>:[X](left: InputExpr[X]) = new PortExpr[X => Y] {
+    def =>:[X](left: InputExpr[X]) = new Expr[X => Y] {
       def description = s"${left.description} => ${right.description}"
       def lift(f: X => Y, cont: => Action) = left.lift(f andThen right.lift(cont))
     }
@@ -85,41 +90,5 @@ trait FlowFunctions { this: FlowGraph =>
   implicit class SingleOutputExpr[Y]( port: OutputPort[Y]) extends OutputExpr[Y] {
     def description = port.toString
     def lift(cont: => Action) = (y: Y) => output(port, y)(cont)
-  }
-
-  def balancer[Message](label: Label[Message]) = new Process {
-    def description = s"balancer for $label"
-
-    def action = fanout(label) { n => 
-      
-      def transfer(i: Int): Action = input(label) { m => 
-        output(label, m, i) { transfer(i)}
-      }
-      
-      def loop(i: Int): Action = 
-        if(i < n-1) fork(transfer(i)) { loop(i+1) }
-        else transfer(i)
-
-      if(n > 0) loop(0)
-      else stop
-    }
-  }
-
-  def repeater[Message](label: Label[Message]) = new Process {
-    def description = s"balancer for $label"
-
-    def action = fanout(label) { n => 
-     
-      def receive: Action = input(label) { m =>
-        send(0, m)
-      }
-
-      def send(i: Int, m: Message): Action =
-        if(i < n) output(label, m, i)(send(i+1, m))
-        else receive
-
-      if(n > 0) receive
-      else stop
-    }
   }
 }

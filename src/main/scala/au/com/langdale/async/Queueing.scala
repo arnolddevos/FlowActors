@@ -8,7 +8,7 @@ object Dequeue {
   def unapply[T](q: Queue[T]) = if(q.isEmpty) None else Some(q.dequeue)
 }
 
-trait FlowQueueing { this: FlowTrace =>
+trait Queueing { this: Trace =>
  
   type MK[+Message] = Task => Message
   type KM[-Message] = Task => Message => Unit

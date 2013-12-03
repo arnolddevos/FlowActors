@@ -1,5 +1,6 @@
 package au.com.langdale
 package async
+package examples
 
 trait ExampleWiring { this: GraphDSL =>
 

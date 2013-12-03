@@ -4,7 +4,7 @@ package async
 import java.util.concurrent.atomic.AtomicInteger
 import scala.annotation.elidable
 
-trait FlowTrace {
+trait Trace {
   
   type Task 
 
@@ -12,26 +12,26 @@ trait FlowTrace {
   def trace(x: Any*)(implicit t: Task)
 }
 
-object FlowTrace {
+object Trace {
   
-  trait Noop extends FlowTrace {
+  trait Noop extends Trace {
     class Task
     def task(major: Int, minor: Int) = new Task
     @elidable(0)
     def trace(x: Any*)(implicit t: Task) {}
   }
   
-  trait SimpleTaskId { this: FlowTrace =>
+  trait SimpleTaskId { this: Trace =>
     case class Task(majorId: Int, minorId: Int) 
     def task(major: Int, minor: Int) = Task(major, minor) 
 
   }
   
-  trait Flat extends FlowTrace with SimpleTaskId {
+  trait Flat extends Trace with SimpleTaskId {
     def trace(x: Any*)(implicit t: Task) = println(t.toString + ": " + x.mkString(" "))
   }
   
-  trait Graphviz extends FlowTrace with SimpleTaskId {
+  trait Graphviz extends Trace with SimpleTaskId {
 
     private val logNum = new AtomicInteger
     

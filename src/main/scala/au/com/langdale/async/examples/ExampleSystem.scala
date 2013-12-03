@@ -1,10 +1,11 @@
 package au.com.langdale
 package async
+package examples
 
 import math._
 import java.io.FileOutputStream
 
-object FlowExamples extends FlowGraph with FlowImpl with FlowGraphImpl with FlowExecutor.ForkJoin with FlowTrace.Graphviz {
+object ExampleSystem extends Processes with Builder with GraphDSL with Labels.Basic with FlowImpl with Executor.ForkJoin with Trace.Graphviz {
   
   def main(args: Array[String]) {  
     Console.withOut(new FileOutputStream("trace.dot")) {
@@ -65,7 +66,7 @@ object FlowExamples extends FlowGraph with FlowImpl with FlowGraphImpl with Flow
 
     val graph = 
       B :-data:-> A :-results/logging:-> C & 
-      (A & B) :-supervisor/logging:-> C 
+      (A & B) :-errors/logging:-> C 
     
     println("digraph {")
     run(graph)

@@ -3,19 +3,22 @@ package async
 
 import scala.language.higherKinds
 
-trait GraphRepr {
+/**
+ * Defines a representation for a directed labelled graph 
+ * in which the arc labels carry a type parameter.
+ *
+ * The actual types for Node, Arc and Label are deferred. 
+ * There are two labels per arc called the output and input port label
+ * respectively.  The type of the latter must encompass that of the former.
+ *
+ * The Graph type includes two sets of boundary nodes, heads and tails,
+ * used when defining arcs between two sub-graphs. 
+ */
+trait Graphs extends Labels {
 
   type Node 
-
-  /** A label for an input port */
-  type InputPort[-Message]
-
-  /** A label for an output port */
-  type OutputPort[+Message]
-
-  type Label[Message] <: OutputPort[Message] with InputPort[Message]
-
   type Arc
+
   def arc[Message](node1: Node, port1: OutputPort[Message], port2: InputPort[Message], node2: Node): Arc
 
   case class Graph( arcs: Set[Arc], heads: Set[Node], tails: Set[Node]) 
@@ -65,7 +68,10 @@ trait GraphRepr {
   }
 }
 
-trait GraphDSL extends GraphRepr {
+/**
+ * A graph construction DSL.
+ */
+trait GraphDSL extends Graphs {
 
   implicit class GraphOps( val graph: Graph) {
     def :-( rhs: WiringOps) = LeftProject(List((graph, rhs.wiring)))
@@ -95,65 +101,5 @@ trait GraphDSL extends GraphRepr {
 
   implicit class OutputOps[Message](output: OutputPort[Message]) {
     def /( input: InputPort[Message]) = Splice( output, input)
-  }
-}
-
-trait FlowGraph extends Flow with GraphDSL {
-  type Node = Process
-
-  /** A base trait for a process to execute at a Site */
-  trait Process {
-    override def toString = s"Process($description)"
-    def description: String
-    def action: Action 
-    def *(n: Int) = Parallel(this, n)
-  }
-
-  case class Parallel(underlying: Process, factor: Int) extends Process {
-    override def toString = s"$underlying*$factor"
-    def description = underlying.description
-    def action = loop(factor)
-    private def loop(n: Int): Action = 
-      if(n > 0) fork(underlying.action) { loop(n-1) }
-      else stop
-  }
-
-  def action(process: Process) = process.action
-  val supervisor = label[(Site, Throwable)]
-  def label[Message]: Label[Message]
-  def run(graph: Graph): Map[Process, Site]
-}
-
-trait FlowGraphImpl { this: FlowGraph =>
-
-  trait OutputPort[+Message]
-  trait InputPort[-Message]
-  class Label[Message] extends OutputPort[Message] with InputPort[Message]
-  type Arc = Map[Process, Site] => Map[Process, Site]
-
-  def label[Message] = new Label[Message]
-
-  def arc[Message](node1: Process, port1: OutputPort[Message], port2: InputPort[Message], node2: Process): Arc = {
-    sites0 => 
-      val (sites1, site1) = update(sites0)(node1, createSite(node1))
-      val (sites2, site2) = update(sites1)(node2, createSite(node2))
-      site1.connect(port1, site2, port2, site1.fanout(port1))
-      sites2
-  }
-
-  private def update[K, V]( underlying: Map[K, V])(k :K, v: => V): (Map[K, V], V) = {
-    if( underlying contains k)
-      (underlying, underlying(k))
-    else {
-      val v1 = v
-      (underlying updated (k, v1), v1)
-    }
-  }
-
-  def run(graph: Graph): Map[Process, Site] = {
-    val sites0 = Map[Process, Site]()
-    val sites1 = graph.arcs.foldLeft(sites0)((sitesn, arcn) => arcn(sitesn))
-    for( site1 <- sites1.values ) site1.run()
-    sites1
   }
 }

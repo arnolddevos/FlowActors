@@ -3,12 +3,12 @@ package async
 
 import java.util.concurrent.ForkJoinPool
 
-trait FlowExecutor {
+trait Executor {
   def execute(work: Runnable)
 }
 
-object FlowExecutor {
-  trait ForkJoin extends FlowExecutor {
+object Executor {
+  trait ForkJoin extends Executor {
     def execute(work: Runnable) = executor.execute(work)
   
     def concurrentIO = 4
@@ -51,6 +51,5 @@ object FlowExecutor {
         
       lines.mkString("//", "\n//", "")  
     }
-
   }
 }

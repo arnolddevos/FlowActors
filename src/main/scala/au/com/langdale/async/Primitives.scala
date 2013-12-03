@@ -5,7 +5,7 @@ import java.util.concurrent.atomic.{AtomicReference, AtomicInteger}
 import scala.annotation.tailrec
 import scala.util.control.NonFatal
 
-trait FlowPrimitives { this: FlowTrace with FlowExecutor =>
+trait Primitives { this: Trace with Executor =>
   
   class CheckedVar[V](v0: V) {
     private val vr = new AtomicReference[V](v0)
