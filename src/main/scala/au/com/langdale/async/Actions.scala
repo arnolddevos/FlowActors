@@ -8,7 +8,7 @@ package async
  */
 trait Actions extends Flow {
 
-  def lift[F](e: Expr[F])(f: F) = {
+  def lift[F](e: Expr[F])(f: F): Action = {
     def loop: Action = e.lift(f, loop)
     loop
   }
@@ -91,4 +91,12 @@ trait Actions extends Flow {
     def description = port.toString
     def lift(cont: => Action) = (y: Y) => output(port, y)(cont)
   }
+}
+
+trait ExprBuilder extends Actions {
+  def autolift[F](f: F)(implicit e: Expr[F]):Action = lift(e)(f)
+
+  implicit def functionIsExpr[X:InputExpr, Y:OutputExpr] = implicitly[InputExpr[X]] =>: implicitly[OutputExpr[Y]]
+  implicit def portIsInput[X](implicit port: InputPort[X]) = SingleInputExpr(port)
+  implicit def portIsOutput[X](implicit port: OutputPort[X]) = SingleOutputExpr(port)
 }
