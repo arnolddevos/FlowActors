@@ -74,4 +74,4 @@ trait Flow extends Labels {
   def createSite(process: Process): Site
 }
 
-object Flow extends Processes with Builder with GraphDSL with Labels.Basic with FlowImpl with Executor.ForkJoin with Trace.Noop
+object Flow extends Processes with Actions with Builder with GraphDSL with Labels.Basic with FlowImpl with Executor.ForkJoin with Trace.Noop

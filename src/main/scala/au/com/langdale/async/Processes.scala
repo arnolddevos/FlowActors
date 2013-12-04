@@ -4,28 +4,33 @@ package async
 /**
  * Define the Process type and provive Process contruction utilities.
  */
-trait Processes extends Flow with Actions {
+trait Processes extends Flow {
 
   /** A base trait for a process to execute at a Site */
-  trait Process {
+  trait Process { underlying =>
     override def toString = s"Process($description)"
+
     def description: String
     def action: Action 
-    def *(n: Int) = Parallel(this, n)
+
+    def *(n: Int) = Parallel(underlying, n)
+
+    def !:( d: String ) = 
+      new Process {
+        def description = d
+        def action = underlying.action
+      }
   }
 
   case class Parallel(underlying: Process, factor: Int) extends Process {
-    override def toString = s"$underlying*$factor"
-    def description = underlying.description
-    def action = loop(factor)
-    private def loop(n: Int): Action = 
-      if(n > 0) fork(underlying.action) { loop(n-1) }
-      else stop
-  }
- 
-  def process[X](e: Expr[X])(x: X) = new Process {
-    def description = e.description
-    def action: Action = lift(e)(x)
+    def description = s"${underlying.description} * $factor"
+
+    def action = {
+      def loop(n: Int): Action = 
+        if(n > 0) fork(underlying.action) { loop(n-1) }
+        else stop
+      loop(factor)  
+    }
   }
 
   def action(process: Process) = process.action
