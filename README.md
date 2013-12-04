@@ -31,7 +31,7 @@ trait SampleGraph extends SampleDecls {
     InitialData :- urls :-> Fetcher*N :- raw :-> Splitter -: ( 
   	  urls ->: Dedup -: urls ->: Fetcher*N & 
   	  text ->: Filer*M -: metrics ->: Reporter ) &
-    (Fetcher & Splitter & Dedup & Filer & Reporter) :- supervisor :-> Supervisor
+    (Fetcher & Splitter & Dedup & Filer & Reporter) :- errors :-> Supervisor
 }
 ```
 
