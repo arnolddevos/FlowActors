@@ -28,7 +28,7 @@ trait Primitives { this: Trace with Executor =>
     private val taskCount = new AtomicInteger
     
     val actorId = actorCount.incrementAndGet
-    override def toString() = "Actor(" + actorId + ")"
+    override def toString() = "Site(" + actorId + ")"
     
     private val waiters = new CheckedVar[List[Task => Unit]](Nil)
     
