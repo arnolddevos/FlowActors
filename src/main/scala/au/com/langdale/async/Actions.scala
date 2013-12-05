@@ -98,7 +98,7 @@ trait Actions { this: Flow with Processes =>
   }
 
   implicit def both[X1, X2](implicit expr1: InputExpr[X1], expr2: InputExpr[X2]) = new InputExpr[(X1, X2)] {
-    def description = s"either(${expr1.description},${expr2.description})"
+    def description = s"both(${expr1.description},${expr2.description})"
     def lift(cont: ((X1, X2)) => Action) = expr1.lift(x1 => expr2.lift(x2 => cont((x1, x2))))
   }
 
