@@ -2,7 +2,7 @@ package au.com.langdale
 package async
 
 /**
- *  Operations to lift functions into Actions and attach port labels. 
+ *  Operations to lift functions into processes and attach port labels. 
  *  This involves a transformation from direct style to continuation passing style.
  *
  *  The eligable port labels should be marked as implicit to be picked up by the
@@ -22,15 +22,29 @@ trait Actions { this: Flow with Processes =>
   }
 
   def produce[Y](y: Y)(implicit e: OutputExpr[Y]) = new Process { 
-    def description = e.description
+    def description = s"produce(${e.description})"
     def action = e.lift(stop)(y)
   }
 
   def consume[X](f: X => Unit)(implicit e: InputExpr[X]) = new Process {
-    def description = e.description
+    def description = s"consume(${e.description})"
     def action = {
       def loop: Action = e.lift { x => f(x); loop }
       loop
+    }
+  }
+
+  trait Zero[S] { def zero: S }
+  def zero[S](s: S) = new Zero[S] { def zero = s }
+
+  def accumulate[X,S](f: S => X => S)(implicit e1: InputExpr[X], e2: OutputExpr[S], e3: Zero[S]) = new Process {
+    def description = s"accumulate ${e1.description} producing ${e2.description}"
+    def action = {
+      def loop(s: S): Action = e1.lift { x => 
+        val s1 = f(s)(x)
+        e2.lift(loop(s1))(s1)
+      }
+      loop(e3.zero)
     }
   }
 
