@@ -4,8 +4,12 @@ package async
 import scala.language.higherKinds
 
 /**
- * Supply Labels which can be used to identify an input port
- * or an output port of an execution Site, Process or graph Node.
+ * Labels are used to identify an input or output port
+ * at an execution Site, on a Process or in a graph.
+ * 
+ * When marked implicit, a label identifies a parameter
+ * or result of a function lifted into a process.
+ *
  * Each label is distinct and carries a type parameter.
  */
 trait Labels {
@@ -21,6 +25,9 @@ trait Labels {
 
   /** create a fresh label with the given type */
   def label[Message]: Label[Message]
+
+  /** create a fresh label and attach a description to it */
+  def label[Message]( descr: String ): Label[Message]
 }
 
 object Labels {
@@ -29,5 +36,6 @@ object Labels {
     trait InputPort[-Message]
     class Label[Message] extends OutputPort[Message] with InputPort[Message]
     def label[Message] = new Label[Message]
+    def label[Message]( descr: String ) = new Label[Message] { override def toString = descr }
   }
 }

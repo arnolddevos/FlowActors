@@ -62,6 +62,7 @@ trait GraphPrint extends GraphDSL {
   var wireCount = 0
   case class Label[Message](i: Int) extends OutputPort[Message] with InputPort[Message]
   def label[Message] = Label[Message]({wireCount += 1; wireCount})
+  def label[Message](descr: String) = label[Message]
 
   case class Arc(node1: Node, port1: OutputPort[_], port2: InputPort[_], node2: Node)
   def arc[Message](node1: Node, port1: OutputPort[Message], port2: InputPort[Message], node2: Node) = Arc(node1, port1, port2, node2)
