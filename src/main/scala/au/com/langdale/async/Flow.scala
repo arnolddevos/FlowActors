@@ -40,7 +40,7 @@ trait Flow extends Labels {
   /** create an action that depends on a port's fanout */
   def fanout[Message]( label: OutputPort[Message])(step: Int => Action): Action
 
-  /** Fork another thread of control */
+  /** Fork a parallel series of continuations. */
   def fork( step1: => Action )( step2: => Action ): Action
 
   /** A no-op wih no continuation */
