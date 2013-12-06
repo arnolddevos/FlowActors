@@ -43,6 +43,9 @@ trait Flow extends Labels {
   /** Fork a parallel series of continuations. */
   def fork( step1: => Action )( step2: => Action ): Action
 
+  /** Continue after a delay or timeout an input operation. */
+  def after(millis: Long)(step: => Action): InputAction
+
   /** A no-op wih no continuation */
   def stop: Action
 

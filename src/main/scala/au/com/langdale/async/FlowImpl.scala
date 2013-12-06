@@ -2,6 +2,7 @@ package au.com.langdale
 package async
 
 import scala.util.control.NonFatal
+import java.util.{Timer, TimerTask}
 
 trait FlowImpl extends Flow with Primitives with Queueing { this: Trace with Executor =>
 
@@ -67,7 +68,7 @@ trait FlowImpl extends Flow with Primitives with Queueing { this: Trace with Exe
 
   /** Create an input action */
   def input[Message]( label: InputPort[Message])( step: Message => Action ): InputAction = 
-    new BasicInputAction(label)(step)
+    new SingleInputAction(label)(step)
 
   /** Create an output action */
   def output[Message]( label: OutputPort[Message], m: Message, n: Int)( step: => Action ): Action = 
@@ -80,6 +81,10 @@ trait FlowImpl extends Flow with Primitives with Queueing { this: Trace with Exe
   /** Fork another thread of control */
   def fork( step1: => Action )( step2: => Action ): Action =
     new Fork(step1, step2)
+
+  /** Continue after a delay or timeout an input operation. */
+  def after(millis: Long)(step: => Action): InputAction = 
+    new TimerAction(millis)(step)
 
   /** create a stop action */
   def stop: Action = Stop()
@@ -104,17 +109,26 @@ trait FlowImpl extends Flow with Primitives with Queueing { this: Trace with Exe
     }
   }
 
-  private class BasicInputAction[Message]( label: InputPort[Message])( step: Message => Action ) 
-    extends InputAction with CancelRef { id: CancelRef =>
-    
-    private[FlowImpl] def dispatch(site: Site)(implicit t: Task) = dispatchLater(site, () => ())
-    
-    def dispatchLater(site: Site, cancel: () => Unit)(implicit t: Task) = { import site._
+  private trait BasicInputAction extends InputAction {
+    private[FlowImpl] def dispatch(site: Site)(implicit t: Task) = dispatchLater(site, Cancellation { t => () })
+    def dispatchLater(site: Site, cancel: Cancellation)(implicit t: Task): Cancellation
+    def dispatchNow(site: Site)(implicit t: Task): Boolean
+  }
+
+  case class Cancellation( f: Task => Unit ) {
+    def run( implicit t:Task) = f(t)
+  }
+
+  private class SingleInputAction[Message]( label: InputPort[Message])( step: Message => Action ) extends BasicInputAction {
+      
+    def dispatchLater(site: Site, cancel: Cancellation)(implicit t: Task) = { import site._
+      val id = new CancelRef
       inputs(label) { 
         inputs.transition[Message](id){ implicit t => m =>
-          cancel(); runStep { step(m) }
+          cancel.run; runStep { step(m) }
         }
       }
+      Cancellation { implicit t => inputs(label) { inputs.cancel(id) }}
     }
 
     def dispatchNow(site: Site)(implicit t: Task): Boolean = { import site._
@@ -124,29 +138,42 @@ trait FlowImpl extends Flow with Primitives with Queueing { this: Trace with Exe
         }
       }
     }
-    
-    def cancel(site: Site)(implicit t: Task) = { import site._
-      inputs(label) { inputs.cancel(id) }
+  }
+
+  private object timer extends Timer {
+    def after( delay: Long)( effect: => Unit) = {
+      val event = new TimerTask { def run = effect }
+      schedule(event, delay)
+      event
     }
+  }
+
+  private class TimerAction(delay: Long)(step: => Action) extends BasicInputAction {
+    def dispatchLater(site: Site, cancel: Cancellation)(implicit t: Task) = {
+      @volatile var cancelled = false
+      val event = timer.after(delay) { site.enqueue { implicit t => if(!cancelled) { cancel.run; site.runStep { step }}}}
+      Cancellation { t => cancelled = true; event.cancel }
+    }
+    def dispatchNow(site: Site)(implicit t: Task) = false
   }
   
   private case class Alternatives(a1: InputAction, a2: InputAction) extends InputAction {
-
-    final def exists(a: InputAction=this)(f: BasicInputAction[_] => Boolean): Boolean = a match {
-      case a: BasicInputAction[_] => f(a)
-      case Alternatives(a1, a2) => exists(a1)(f) || exists(a2)(f)
-    }
     
-    final def foreach(a: InputAction=this)(f: BasicInputAction[_] => Unit): Unit = a match {
-      case a: BasicInputAction[_] => f(a)
-      case Alternatives(a1, a2) => foreach(a1)(f); foreach(a2)(f)
+    final def toList: List[BasicInputAction] = {
+      def gather(a: InputAction=this): List[BasicInputAction] = a match {
+        case a: BasicInputAction => List(a)
+        case Alternatives(a1, a2) => gather(a2) ::: gather(a1)
+      }
+      gather(this)
     }
     
     private[FlowImpl] def dispatch(site: Site)(implicit t: Task): Unit = {
-      val done = exists()(_.dispatchNow(site))
+      val actions = toList
+      val done = actions.exists(_.dispatchNow(site))
       if( ! done ) {
-        val cancel = () => foreach() { _.cancel(site) }
-        foreach() { _.dispatchLater(site, cancel) }
+        var cs: List[Cancellation] = sys.error("dispatch called outside enqueue")
+        def cancelAll = Cancellation { implicit t => for( c <- cs ) { c.run }}
+        cs = actions.map( _.dispatchLater(site, cancelAll))
       }
     }
   }

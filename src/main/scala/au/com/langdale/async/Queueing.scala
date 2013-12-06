@@ -84,7 +84,7 @@ trait Queueing { this: Trace =>
     }
   }
 
-  trait CancelRef
+  class CancelRef
 
   trait Queueing {
     
