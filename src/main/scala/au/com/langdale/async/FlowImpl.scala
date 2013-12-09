@@ -160,7 +160,7 @@ trait FlowImpl extends Flow with Primitives with Queueing { this: Trace with Exe
   private case class Alternatives(a1: InputAction, a2: InputAction) extends InputAction {
     
     final def toList: List[BasicInputAction] = {
-      def gather(a: InputAction=this): List[BasicInputAction] = a match {
+      def gather(a: InputAction): List[BasicInputAction] = a match {
         case a: BasicInputAction => List(a)
         case Alternatives(a1, a2) => gather(a2) ::: gather(a1)
       }
@@ -171,7 +171,7 @@ trait FlowImpl extends Flow with Primitives with Queueing { this: Trace with Exe
       val actions = toList
       val done = actions.exists(_.dispatchNow(site))
       if( ! done ) {
-        var cs: List[Cancellation] = sys.error("dispatch called outside enqueue")
+        var cs: List[Cancellation] = List(Cancellation( t => sys.error("dispatch called outside enqueue")))
         def cancelAll = Cancellation { implicit t => for( c <- cs ) { c.run }}
         cs = actions.map( _.dispatchLater(site, cancelAll))
       }

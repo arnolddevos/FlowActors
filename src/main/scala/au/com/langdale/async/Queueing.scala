@@ -150,7 +150,7 @@ trait Queueing { this: Trace =>
         transfer(km, m)
         if(p.length == 1) Ready(p.head) else Backlog(p, Queue.empty) 
       case s @ Backlog(_, _) => 
-        trace("error", "inconsistent state", s); s
+        sys.error("inconsistent state " + s)
     }
           
     def cancel[Message](h: CancelRef)(implicit t: Task): Transition[Message] = {
@@ -166,9 +166,7 @@ trait Queueing { this: Trace =>
     }
 
     def transitionMaybe[Message](km: KM[Message])(implicit t: Task): PartialFunction[State[Message], State[Message]] = {
-      case State(Ready(m), d) => 
-        transfer(km, m)
-        State(Idle[Message](), d)
+      case s @ State(qs @ (Ready(_)|Backlog(_,_)), d) => State( recv(qs)(null, km), d)
     }
   
     def transition[Message](n: Int)(implicit t: Task): Transition[Message] = {
