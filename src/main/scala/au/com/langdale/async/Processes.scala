@@ -22,6 +22,13 @@ trait Processes extends Flow {
       }
   }
 
+  def process(step: => Action) = new Process {
+    def description = "anon"
+    def action = step
+  }
+
+  def action(process: Process) = process.action
+
   case class Parallel(underlying: Process, factor: Int) extends Process {
     def description = s"${underlying.description} * $factor"
 
@@ -32,8 +39,6 @@ trait Processes extends Flow {
       loop(factor)  
     }
   }
-
-  def action(process: Process) = process.action
 
   def balancer[Message](label: Label[Message]) = new Process {
     def description = s"balancer for $label"

@@ -9,12 +9,20 @@ trait Trace {
   type Task 
 
   def task(major: Int, minor: Int): Task
-  def trace(x: Any*)(implicit t: Task)
+  def trace(xs: Any*)(implicit t: Task): Unit
+  def crash(xs: Any*)(implicit t: Task): Nothing
 }
 
 object Trace {
+
+  trait Crash { this: Trace =>
+    def crash(xs: Any*)(implicit t: Task): Nothing = {
+      trace(Array("crash!") ++ xs: _*)
+      sys.error(t.toString + ": " + xs.mkString(" "))
+    }
+  }
   
-  trait Noop extends Trace {
+  trait Noop extends Trace with Crash {
     class Task
     def task(major: Int, minor: Int) = new Task
     @elidable(0)
@@ -27,11 +35,11 @@ object Trace {
 
   }
   
-  trait Flat extends Trace with SimpleTaskId {
-    def trace(x: Any*)(implicit t: Task) = println(t.toString + ": " + x.mkString(" "))
+  trait Flat extends Trace with Crash with SimpleTaskId {
+    def trace(xs: Any*)(implicit t: Task) = println(t.toString + ": " + xs.mkString(" "))
   }
   
-  trait Graphviz extends Trace with SimpleTaskId {
+  trait Graphviz extends Trace with Crash with SimpleTaskId {
 
     private val logNum = new AtomicInteger
     

@@ -70,11 +70,13 @@ trait Flow extends Labels {
     def fanout[Message](label: OutputPort[Message]): Int
 
     /** Inject a new continuation to be dispatched at this site */ 
-    def run(step: => Action =action(process), instances: Int = 1): Unit
+    def run(step: => Action = action(process), instances: Int = 1): Unit
   }
 
   /** Create a Site */
   def createSite(process: Process): Site
 }
 
-object Flow extends Processes with Actions with Builder with GraphDSL with Labels.Basic with FlowImpl with Executor.ForkJoin with Trace.Noop
+object Flow extends Processes with Actions with Builder with GraphDSL with Labels.Basic with FlowImpl with Executor.ForkJoin with Trace.Noop {
+  object Debug extends Processes with Actions with Builder with GraphDSL with Labels.Basic with FlowImpl with Executor.ForkJoin with Trace.Flat
+}
