@@ -1,6 +1,8 @@
 package au.com.langdale
 package async
 
+import scala.util.control.NonFatal
+
 /**
  *  Operations to lift functions into processes and attach port labels. 
  *  This involves a transformation from direct style to continuation passing style.
@@ -133,7 +135,14 @@ trait Actions { this: Flow with Processes =>
 
   implicit class SingleInputExpr[X]( port: InputPort[X]) extends InputExpr[X] {
     def description = port.toString
-    def lift(cont: X => Action) = input(port)(cont)
+    def lift(cont: X => Action) = input(port) { x =>
+      try {
+        cont(x)
+      }
+      catch {
+        case NonFatal(e) => throw DeadLetter(x, port, e)
+      }
+    }
   }
 
   implicit def outputPort[Y](implicit port: OutputPort[Y]) = SingleOutputExpr(port)

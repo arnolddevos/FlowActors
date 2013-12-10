@@ -29,6 +29,9 @@ trait Processes extends Flow {
 
   def action(process: Process) = process.action
 
+  case class DeadLetter[X](value: X, port: InputPort[X], cause: Throwable) extends Exception(cause)
+  object Site { def unapply(s: Site) = Some(s.process) }
+
   case class Parallel(underlying: Process, factor: Int) extends Process {
     def description = s"${underlying.description} * $factor"
 
