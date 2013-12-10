@@ -12,6 +12,21 @@ import scala.util.control.NonFatal
  *
  *  Alternatively, a small DSL is used to express the function signature 
  *  explicitly in terms of port labels.
+ *
+ *  Example usage: Given these declarations
+ *
+ *  implicit val xs: Label[X]
+ *  implicit val ys: Label[Y]
+ *  val f: X => Y
+ *
+ *  then a process that receives Xs and emits Ys can be created by either of these:-
+ *
+ *  val p1 = transform[X => Y](f)      // use implicit port labels for the resulting process
+ *  val p2 = transformAs(xs =>: ys)(f) // use explicit port labels
+ *
+ *  The transform operation can handle curried functions of any number of arguments.
+ *  Eligable argument and result types must have implicit labels, 
+ *  or may be Either, Tuple2, Iterable, Iterator or Option contructions of eligable types.
  */
 trait Actions { this: Flow with Processes =>
 
