@@ -114,6 +114,11 @@ trait Actions { this: Flow with Processes =>
     def lift(f: X => F, cont: => Action) = left.lift(x => right.lift(f(x), cont))
   }
 
+  implicit def forkedProcess = new OutputExpr[Process] {
+    def description = "fork a process"
+    def lift( cont: => Action) = p => fork(p.action)(cont)
+  }
+
   trait Expr[F] { right =>
     def description: String
     def lift(f: F, cont: => Action): Action
