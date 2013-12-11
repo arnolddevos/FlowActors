@@ -54,26 +54,35 @@ trait Actions { this: Flow with Processes =>
   trait Zero[S] { def zero: S }
   def zero[S](s: S) = new Zero[S] { def zero = s }
 
-  def accumulate[X,S](f: X => S => S)(implicit e1: InputExpr[X], e2: OutputExpr[S], e3: Zero[S]) = 
-    machine[X,S,S]{ x => s0 => 
-      val s1 = f(x)(s0)
-      (s1, s1)
-    }
+  def machine[F](f: F)(implicit e: Machine[F]) = new Process {
+    def description = e.description
+    def action = e.lift(f)
+  }
 
-  def machine[X,Y,S](f: X => S => (S, Y))(implicit e1: InputExpr[X], e2: OutputExpr[Y], e3: Zero[S]) = new Process {
-    def description = s"accept ${e1.description} producing ${e2.description}"
-    def action = {
+  trait Machine[F] {
+    def description: String
+    def lift(f: F): Action
+  }
+
+  implicit def stateMachine[X,Y,S](implicit e1: InputExpr[X], e2: OutputExpr[Y], e3: Zero[S]) = new Machine[(S, X) => (S, Y)] {
+    def description = s"integrate ${e1.description} producing ${e2.description}"
+    def lift(f: (S, X) => (S, Y)) = {
       def loop(s0: S): Action = e1.lift { x => 
-        val (s1, y) = f(x)(s0)
+        val (s1, y) = f(s0, x)
         e2.lift(loop(s1))(y)
       }
       loop(e3.zero)
     }
   }
 
+  implicit def accumulator[X,S](implicit e: Machine[(S, X) => (S, S)] ) = new Machine[(S, X) => S] {
+    def description = e.description
+    def lift(f: (S, X) => S) = e.lift { (s0, x) => val s1 = f(s0, x); (s1, s1) }
+  }
+
   def transformAs[F](e: Expr[F])(f: F) = transform(f)(e)
   def produceAs[Y](e: OutputExpr[Y])(y: Y) = produce(y)(e)
-  def consumeAs[X](e: InputExpr[X])(f: X => Unit) = consume(f)(e)
+  def consumeFrom[X](e: InputExpr[X])(f: X => Unit) = consume(f)(e)
 
   implicit def option[Y](implicit expr: OutputExpr[Y]) = new OutputExpr[Option[Y]] {
     def description = s"option(${expr.description})"
