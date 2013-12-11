@@ -92,15 +92,19 @@ trait Actions { this: Flow with Processes =>
     }
   }
 
-  implicit def traverse[Y](implicit expr: OutputExpr[Y]) = new OutputExpr[TraversableOnce[Y]] {
-    def description = s"seq(${expr.description})"
-    def lift(cont: => Action): TraversableOnce[Y] => Action = { ys =>
-      val yi = ys.toIterator
+  implicit def iterateOutput[Y](implicit expr: OutputExpr[Y]) = new OutputExpr[Iterator[Y]] {
+    def description = s"iterate(${expr.description})"
+    def lift(cont: => Action): Iterator[Y] => Action = { ys =>
       def loop: Action = 
-        if(yi.hasNext) { val y = yi.next; expr.lift(loop)(y) }
+        if(ys.hasNext) { val y = ys.next; expr.lift(loop)(y) }
         else cont
       loop
     }
+  }
+
+  implicit def iterableOutput[Y](implicit e: OutputExpr[Iterator[Y]]) = new OutputExpr[Iterable[Y]] {
+    def description = e.description
+    def lift(cont: => Action): Iterable[Y] => Action = { ys => e.lift(cont)(ys.toIterator) }
   }
 
   implicit def eitherOutput[Y1, Y2](implicit expr1: OutputExpr[Y1], expr2: OutputExpr[Y2]) = new OutputExpr[Either[Y1, Y2]] {
