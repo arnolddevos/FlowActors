@@ -30,7 +30,39 @@ trait Processes extends Flow {
   def action(process: Process) = process.action
 
   case class DeadLetter[X](value: X, port: InputPort[X], cause: Throwable) extends Exception(cause)
-  object Site { def unapply(s: Site) = Some(s.process) }
+
+  object DeadLetters {
+    type Given = (Any, InputPort[_])
+
+    def unapply(t: Throwable): Option[(Seq[Given], Throwable)] = {
+    
+      def unwind(gs: List[Given], t: Throwable): (List[Given], Throwable) = t match {
+        case DeadLetter(v, p, c) => unwind((v, p) :: gs, c)
+        case t => (gs, t)
+      }
+    
+      Some(unwind(Nil, t))
+    }
+  }
+
+  object Site { 
+    def unapply(s: Site) = Some(s.process) 
+  }
+
+  val defaultSupervisor = new Process {
+    def description = "default supervisor"
+
+    def action = {
+      def loop: Action = input(errors) {
+        case (Site(p), DeadLetters(gs, t)) => 
+          Console.err.println(s"$p failed with $t")
+          if(! gs.isEmpty)
+            Console.err.println(gs.mkString("\t", "\n\t", ""))
+          loop
+      }
+      loop
+    }
+  }
 
   case class Parallel(underlying: Process, factor: Int) extends Process {
     def description = s"${underlying.description} * $factor"

@@ -5,7 +5,7 @@ package async
  * Given a graph of Processes construct a graph of Sites 
  * and run each process at its corresponding site.
  */
-trait Builder extends Flow with Graphs {
+trait Builder extends Flow with Processes with Graphs {
   type Node = Process
 
   type Arc = Map[Process, Site] => Map[Process, Site]
@@ -27,10 +27,15 @@ trait Builder extends Flow with Graphs {
     }
   }
 
-  def run(graph: Graph): Map[Process, Site] = {
+  def run(graph: Graph, supervisor: Process = defaultSupervisor): Map[Process, Site] = {
     val sites0 = Map[Process, Site]()
     val sites1 = graph.arcs.foldLeft(sites0)((sitesn, arcn) => arcn(sitesn))
-    for( site1 <- sites1.values ) site1.run()
-    sites1
+    val superSite = createSite(supervisor)
+    for( site1 <- sites1.values ) {
+      site1.connect(errors, superSite, errors)
+      site1.run()
+    }
+    superSite.run()
+    sites1 updated (supervisor, superSite)
   }
 }
