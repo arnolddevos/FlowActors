@@ -1,6 +1,6 @@
-package au.com.langdale
-package async
 package examples
+import au.com.langdale.async._
+
 
 import math._
 import java.io.FileOutputStream
