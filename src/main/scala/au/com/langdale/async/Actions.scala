@@ -185,4 +185,15 @@ trait Actions { this: Flow with Processes =>
     def description = port.toString
     def lift(cont: => Action) = (y: Y) => output(port, y)(cont)
   }
+
+  case class Offer[X](from: Site, port: Label[X])
+
+
+  def propose[X]( step: Offer[X] => Action ): Action = control(site => step(Offer(site, label[X])))
+  def accept[X](offer: Offer[X])(step: => Action): Action = control { site =>
+    offer.from.connect(offer.port, site, offer.port)
+    step
+  }
+  def complete[X](offer: Offer[X]): Unit = offer.from.disconnect(offer.port)
+
 }

@@ -19,7 +19,7 @@ trait Solution extends Problem {
   val inputFileName: String
 
   type Line = Option[String]
-  case class Document(name: String, content: Label[Line])
+  case class Document(name: String, content: Offer[Line])
 
   val reader = produce {
     def packetize( it: Iterator[String]) = it.map(Some(_)) ++ Iterator(None)
@@ -30,9 +30,9 @@ trait Solution extends Problem {
   val writer = transform[Document => Process] { doc =>
     val o = new PrintWriter(new File(doc.name))
 
-    consumeFrom(doc.content) {
+    consumeFrom(doc.content.port) {
       case Some(l) => o.println(l)
-      case None    => o.close
+      case None    => complete(doc.content); o.close
     }
   }
 
@@ -43,14 +43,16 @@ trait Solution extends Problem {
 
     def start: Action = input(lines) {
       case Some(Header(name)) => 
-        val doc = Document(name, label[Line])
-        output(docs, doc) { body(doc, 0) }
+        propose[Line] { offer =>
+          val doc = Document(name, offer)
+          output(docs, doc) { body(doc, 0) }
+        }
       case None => stop
     }
 
     def body(doc: Document, count: Int): Action = input(lines) {
-      case Some(Trailer(n)) if n.toInt == count => output(doc.content, None) { start }
-      case line @ Some(_) => output(doc.content, line) { body(doc, count+1) }
+      case Some(Trailer(n)) if n.toInt == count => output(doc.content.port, None) { start }
+      case line @ Some(_) => output(doc.content.port, line) { body(doc, count+1) }
     }
 
     start
