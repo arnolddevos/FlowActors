@@ -75,12 +75,8 @@ trait FlowImpl extends Flow with Primitives with Queueing { this: Trace with Exe
     new OutputAction(label, n: Int, m)(step)
 
   /** create an action that depends on a port's fanout */
-  def fanout[Message]( label: OutputPort[Message])(step: Int => Action): Action = 
-    new Fanout(label)(step)
-  
-  /** Fork another thread of control */
-  def fork( step1: => Action )( step2: => Action ): Action =
-    new Fork(step1, step2)
+  def control(step: Site => Action): Action = 
+    new Control(step)
 
   /** Continue after a delay or timeout an input operation. */
   def after(millis: Long)(step: => Action): InputAction = 
@@ -100,12 +96,6 @@ trait FlowImpl extends Flow with Primitives with Queueing { this: Trace with Exe
   private class OutputAction[Message]( label: OutputPort[Message], n: Int, m: Message)( step: => Action ) extends Action {
     private[FlowImpl] def dispatch(site: Site)(implicit t: Task) = { import site._
       outputs(label, n) { outputs.transition(implicit t => { runStep(step); m })}
-    }
-  }
-
-  private class Fanout[Message]( label: OutputPort[Message] )( step: Int => Action ) extends Action {
-    private[FlowImpl] def dispatch(site: Site)(implicit t: Task) = { 
-      site.runStep(step(site.fanout(label)))
     }
   }
 
@@ -178,9 +168,9 @@ trait FlowImpl extends Flow with Primitives with Queueing { this: Trace with Exe
     }
   }
 
-  private class Fork( step1: => Action, step2: => Action ) extends Action {
-    private[FlowImpl] def dispatch(site: Site)(implicit t: Task): Unit = { import site._
-      runStep(step1); runStep(step2)
+  private class Control( step: Site => Action ) extends Action {
+    private[FlowImpl] def dispatch(site: Site)(implicit t: Task) = { 
+      site.runStep(step(site))
     }
   }
   

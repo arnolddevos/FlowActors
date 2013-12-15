@@ -37,11 +37,16 @@ trait Flow extends Labels {
   /** Create an output action */
   def output[Message]( label: OutputPort[Message], m: Message, n: Int = 0)( step: => Action ): Action 
 
-  /** create an action that depends on a port's fanout */
-  def fanout[Message]( label: OutputPort[Message])(step: Int => Action): Action
+  /** Create an action that depends on the site */
+  def control(step: Site => Action): Action
+
+  /** Create an action that depends on the fanout of a port */
+  def fanout[Message]( label: OutputPort[Message])(step: Int => Action): Action = 
+    control { site => step(site.fanout(label)) }
 
   /** Fork a parallel series of continuations. */
-  def fork( step1: => Action )( step2: => Action ): Action
+  def fork( child: => Action, instances: Int = 1 )( parent: => Action ): Action = 
+    control { site => site.run(child, instances); parent }
 
   /** Continue after a delay or timeout an input operation. */
   def after(millis: Long)(step: => Action): InputAction
