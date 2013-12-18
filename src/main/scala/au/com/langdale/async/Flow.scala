@@ -12,16 +12,22 @@ import language.higherKinds
  */
 trait Flow extends Labels { 
 
-  /** Represents something that executes at a site. */
-  type Process
+  /** Represents cooperatively scheduled thread of control that executes at a site. */
+  trait Process {
 
-  /** obtain the initial action from a process */
-  def action(process: Process): Action
+    /** the initial step of this process */
+    def action: Action 
 
-  /** The port label for errors and supervision */
-  val errors = label[(Site, Process, Throwable)]
+    /** document your process */
+    def description: String
 
-  /** A continuation that can be dispatched at a site */
+    /** a process to be executed after this process */
+    def followedBy: Option[Process] = None
+
+    override def toString = s"Process($description)"
+  }
+
+  /** A continuation, a series of which form a process */
   type Action 
 
   /** Actions that receive input can be combined */
@@ -54,7 +60,7 @@ trait Flow extends Labels {
   /** A no-op wih no continuation */
   def stop: Action
 
-  /** A site at which messages are processed. */
+  /** A site at which processes run, messages are received and sent. */
   type Site <: SiteOps
 
   trait SiteOps {
@@ -77,6 +83,9 @@ trait Flow extends Labels {
 
   /** Create a Site */
   def createSite: Site
+
+  /** The port label for errors and supervision */
+  val errors = label[(Site, Process, Throwable)]
 }
 
 object Flow extends Processes with Actions with Builder with GraphDSL with Labels.Basic with FlowImpl with Executor.ForkJoin with Trace.Noop {

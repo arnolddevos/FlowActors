@@ -43,7 +43,7 @@ trait FlowImpl extends Flow with Primitives with Queueing { this: Trace with Exe
     /** inject an action into the site */
     def run(process: Process, instances: Int) = request { implicit t => 
       trace(site, "=>", "Run")
-      for( i <- 1 to instances) runStep( process, action(process))
+      for( i <- 1 to instances) runStep( process, process.action )
     }
 
     /** change buffering depth */  
@@ -175,6 +175,10 @@ trait FlowImpl extends Flow with Primitives with Queueing { this: Trace with Exe
   }
   
   private case class Stop() extends Action {
-    private[FlowImpl] def dispatch(site: Site, process: Process)(implicit t: Task) { trace(site, process, "=>", "Stop")}
+    private[FlowImpl] def dispatch(site: Site, process: Process)(implicit t: Task) { 
+      trace(site, process, "=>", "Stop")
+      for( following <- process.followedBy )
+        site.run(following)
+    }
   }
 }

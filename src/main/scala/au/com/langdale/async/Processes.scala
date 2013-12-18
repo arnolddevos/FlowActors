@@ -6,28 +6,46 @@ package async
  */
 trait Processes extends Flow {
 
-  /** A base trait for a process to execute at a Site */
-  trait Process { underlying =>
-    override def toString = s"Process($description)"
+  /** Combinators for processes */
+  implicit class ProcessOps( underlying: Process ) {
 
-    def description: String
-    def action: Action 
-
-    def *(n: Int) = Parallel(underlying, n)
+    def andThen( other: Process) = 
+      new Process {
+        def description = underlying.description
+        def action = underlying.action
+        override def followedBy = {
+          def rebuild(op: Option[Process]): Process = op match {
+            case Some(p) => 
+              new Process {
+                def description = p.description
+                def action = p.action
+                override def followedBy = Some(rebuild(p.followedBy))
+              }
+            case None => other
+          }
+          Some(rebuild(underlying.followedBy))
+        }
+      }
 
     def !:( d: String ) = 
       new Process {
         def description = d
         def action = underlying.action
+        override def followedBy = underlying.followedBy
+      }
+
+    def *(factor: Int) = 
+      new Process {
+        def description = s"${underlying.description} * $factor"
+        def action = fork(underlying, factor)(stop)
+        override def followedBy = underlying.followedBy
       }
   }
 
   def process(step: => Action) = new Process {
-    def description = "anon"
+    def description = "anonymous"
     def action = step
   }
-
-  def action(process: Process) = process.action
 
   case class DeadLetter[X](value: X, port: InputPort[X], cause: Throwable) extends Exception(cause)
 
@@ -58,11 +76,6 @@ trait Processes extends Flow {
       }
       loop
     }
-  }
-
-  case class Parallel(underlying: Process, factor: Int) extends Process {
-    def description = s"${underlying.description} * $factor"
-    def action = fork(underlying, factor)(stop)
   }
 
   def balancer[Message](label: Label[Message]) = new Process {
