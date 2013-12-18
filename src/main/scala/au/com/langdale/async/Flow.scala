@@ -15,11 +15,11 @@ trait Flow extends Labels {
   /** Represents something that executes at a site. */
   type Process
 
-  /** obtain an action from a process */
+  /** obtain the initial action from a process */
   def action(process: Process): Action
 
   /** The port label for errors and supervision */
-  val errors = label[(Site, Throwable)]
+  val errors = label[(Site, Process, Throwable)]
 
   /** A continuation that can be dispatched at a site */
   type Action 
@@ -38,15 +38,15 @@ trait Flow extends Labels {
   def output[Message]( label: OutputPort[Message], m: Message, n: Int = 0)( step: => Action ): Action 
 
   /** Create an action that depends on the site */
-  def control(step: Site => Action): Action
+  def control(step: (Site, Process) => Action): Action
 
   /** Create an action that depends on the fanout of a port */
   def fanout[Message]( label: OutputPort[Message])(step: Int => Action): Action = 
-    control { site => step(site.fanout(label)) }
+    control { (site, _) => step(site.fanout(label)) }
 
-  /** Fork a parallel series of continuations. */
-  def fork( child: => Action, instances: Int = 1 )( parent: => Action ): Action = 
-    control { site => site.run(child, instances); parent }
+  /** Fork a parallel process at this site */
+  def fork( child: Process, instances: Int = 1 )( parent: => Action ): Action = 
+    control { (site, _) => site.run(child, instances); parent }
 
   /** Continue after a delay or timeout an input operation. */
   def after(millis: Long)(step: => Action): InputAction
@@ -58,9 +58,6 @@ trait Flow extends Labels {
   type Site <: SiteOps
 
   trait SiteOps {
-
-    /** The process which is performed at this Site */
-    val process: Process
 
     /** change the buffer depth for an input */
     def buffer[Message]( label: InputPort[Message], depth: Int): Unit
@@ -75,11 +72,11 @@ trait Flow extends Labels {
     def fanout[Message](label: OutputPort[Message]): Int
 
     /** Inject a new continuation to be dispatched at this site */ 
-    def run(step: => Action = action(process), instances: Int = 1): Unit
+    def run(process: Process, instances: Int = 1): Unit
   }
 
   /** Create a Site */
-  def createSite(process: Process): Site
+  def createSite: Site
 }
 
 object Flow extends Processes with Actions with Builder with GraphDSL with Labels.Basic with FlowImpl with Executor.ForkJoin with Trace.Noop {

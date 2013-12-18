@@ -12,8 +12,8 @@ trait Builder extends Flow with Processes with Graphs {
 
   def arc[Message](node1: Process, port1: OutputPort[Message], port2: InputPort[Message], node2: Process): Arc = {
     sites0 => 
-      val (sites1, site1) = update(sites0)(node1, createSite(node1))
-      val (sites2, site2) = update(sites1)(node2, createSite(node2))
+      val (sites1, site1) = update(sites0)(node1, createSite)
+      val (sites2, site2) = update(sites1)(node2, createSite)
       site1.connect(port1, site2, port2, site1.fanout(port1))
       sites2
   }
@@ -30,12 +30,12 @@ trait Builder extends Flow with Processes with Graphs {
   def run(graph: Graph, supervisor: Process = defaultSupervisor): Map[Process, Site] = {
     val sites0 = Map[Process, Site]()
     val sites1 = graph.arcs.foldLeft(sites0)((sitesn, arcn) => arcn(sitesn))
-    val superSite = createSite(supervisor)
-    for( site1 <- sites1.values ) {
-      site1.connect(errors, superSite, errors)
-      site1.run()
+    val superSite = createSite
+    for((process, site) <- sites1 ) {
+      site.connect(errors, superSite, errors)
+      site.run(process)
     }
-    superSite.run()
+    superSite.run(supervisor)
     sites1 updated (supervisor, superSite)
   }
 }

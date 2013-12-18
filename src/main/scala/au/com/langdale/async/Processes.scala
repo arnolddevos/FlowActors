@@ -45,16 +45,12 @@ trait Processes extends Flow {
     }
   }
 
-  object Site { 
-    def unapply(s: Site) = Some(s.process) 
-  }
-
   val defaultSupervisor = new Process {
     def description = "default supervisor"
 
     def action = {
       def loop: Action = input(errors) {
-        case (Site(p), DeadLetters(gs, t)) => 
+        case (s, p, DeadLetters(gs, t)) => 
           Console.err.println(s"$p failed with $t")
           if(! gs.isEmpty)
             Console.err.println(gs.mkString("\t", "\n\t", ""))
@@ -66,35 +62,30 @@ trait Processes extends Flow {
 
   case class Parallel(underlying: Process, factor: Int) extends Process {
     def description = s"${underlying.description} * $factor"
-
-    def action = {
-      def loop(n: Int): Action = 
-        if(n > 0) fork(underlying.action) { loop(n-1) }
-        else stop
-      loop(factor)  
-    }
+    def action = fork(underlying, factor)(stop)
   }
 
   def balancer[Message](label: Label[Message]) = new Process {
     def description = s"balancer for $label"
 
-    def action = fanout(label) { n => 
-      
-      def transfer(i: Int): Action = input(label) { m => 
-        output(label, m, i) { transfer(i)}
+    def transfer(i: Int) = new Process {
+      def description = s"balancer for $label($i)"
+      def action: Action = input(label) { m => 
+        output(label, m, i) { action }
       }
-      
-      def loop(i: Int): Action = 
-        if(i < n-1) fork(transfer(i)) { loop(i+1) }
-        else transfer(i)
+    }
 
-      if(n > 0) loop(0)
-      else stop
+    def action = fanout(label) { n => 
+      def loop(i: Int): Action = 
+        if(i < n) fork(transfer(i)) { loop(i+1) }
+        else stop
+
+      loop(0)
     }
   }
 
   def repeater[Message](label: Label[Message]) = new Process {
-    def description = s"balancer for $label"
+    def description = s"repeater for $label"
 
     def action = fanout(label) { n => 
      

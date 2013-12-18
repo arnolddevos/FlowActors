@@ -120,7 +120,7 @@ trait Actions { this: Flow with Processes =>
 
   implicit def forkedProcess = new OutputExpr[Process] {
     def description = "fork a process"
-    def lift( cont: => Action) = p => fork(p.action)(cont)
+    def lift( cont: => Action) = p => fork(p)(cont)
   }
 
   implicit def stateMachine[X,Y,S](implicit e1: InputExpr[X], e2: OutputExpr[Y], e3: Zero[S]) = new Machine[(S, X) => (S, Y)] {
@@ -189,8 +189,8 @@ trait Actions { this: Flow with Processes =>
   case class Offer[X](from: Site, port: Label[X])
 
 
-  def propose[X]( step: Offer[X] => Action ): Action = control(site => step(Offer(site, label[X])))
-  def accept[X](offer: Offer[X])(step: => Action): Action = control { site =>
+  def propose[X]( step: Offer[X] => Action ): Action = control((site, _) => step(Offer(site, label[X])))
+  def accept[X](offer: Offer[X])(step: => Action): Action = control { (site, _) =>
     offer.from.connect(offer.port, site, offer.port)
     step
   }

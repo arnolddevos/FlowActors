@@ -4,12 +4,10 @@ import au.com.langdale.async.Flow.{Debug => Flow}
 
 abstract class Testing extends FlatSpec with Matchers with concurrent.AsyncAssertions {
 
-  def siteProcess(step: => Action) = createSite(process(step))
-
-  def runSite(step: => Action) = {
-    val site = siteProcess(step)
-    site.run()
-    site
+  def runProcess(step: => Action) = {
+    val s = createSite
+    s.run(process(step))
+    s
   }
 
   def done( w: Waiter) = {  
@@ -22,14 +20,14 @@ class SitesSpec extends Testing {
 
   "A site" should "run the action of a process" in {
     val w = new Waiter
-    runSite { done(w) }
+    runProcess { done(w) }
     w.await
   }
 
   "The fork operation" should "run two continuations" in {
     val w = new Waiter
-    runSite {
-      fork(done(w))(done(w))
+    runProcess {
+      fork(process(done(w)))(done(w))
     }
     w.await(dismissals(2))
   }
@@ -39,11 +37,11 @@ class SitesSpec extends Testing {
     val channel = label[String]
     val message = "hello, can you hear me?"
     
-    val a = runSite {
+    val a = runProcess {
       output(channel, message) { done(w) }
     }
 
-    val b = runSite {
+    val b = runProcess {
       input(channel) { s => 
         w { s shouldBe message }
         done(w)
@@ -61,7 +59,7 @@ class SitesSpec extends Testing {
     val m2 = "are you still there?"
     val m3 = "the last word"
     
-    val a = siteProcess {
+    val a = runProcess {
       output(channel, m1) { 
         output(channel, m2) {
           output(channel, m3) {
@@ -71,7 +69,7 @@ class SitesSpec extends Testing {
       }
     }
 
-    val b = siteProcess {
+    val b = runProcess {
       input(channel) { s1 => 
         input(channel) { s2 =>
           input(channel) { s3 =>
@@ -85,8 +83,6 @@ class SitesSpec extends Testing {
     }
 
     a.connect(channel, b, channel)
-    a.run()
-    b.run()
     w.await(dismissals(2))
   }
 
@@ -96,7 +92,7 @@ class SitesSpec extends Testing {
     val m1 = "hello, can you hear me?"
     val m2 = "what about now?"
     
-    val a = siteProcess {
+    val a = runProcess {
      output(chan2, m2) { 
         output(chan1, m1) {
           output(chan1, m1) {
@@ -108,7 +104,7 @@ class SitesSpec extends Testing {
       }
     }
 
-    val b = siteProcess {
+    val b = runProcess {
       def loop: Action = 
         input(chan1) { s => 
           w { s shouldBe m1 }
@@ -123,8 +119,6 @@ class SitesSpec extends Testing {
       loop
     }
 
-    a.run()
-    b.run()
     a.connect(chan1, b, chan1)
     a.connect(chan2, b, chan2)
 
@@ -137,7 +131,7 @@ class SitesSpec extends Testing {
     val m1 = "hello, can you hear me?"
     val m2 = "what about now?"
     
-    val a = siteProcess {
+    val a = runProcess {
      output(chan2, m2) { 
         output(chan1, m1) {
           output(chan1, m1) {
@@ -149,7 +143,7 @@ class SitesSpec extends Testing {
       }
     }
 
-    val b = siteProcess {
+    val b = runProcess {
       def loop: Action = 
         input(chan1) { s1 => 
           input(chan2) { s2 => 
@@ -164,9 +158,6 @@ class SitesSpec extends Testing {
 
     a.connect(chan1, b, chan1)
     a.connect(chan2, b, chan2)
-    a.run()
-    b.run()
-
     w.await(dismissals(3))
   }
 
@@ -175,7 +166,7 @@ class SitesSpec extends Testing {
     val delay = 75l // milliseconds
     import System.currentTimeMillis
 
-    runSite {
+    runProcess {
       val t0 = currentTimeMillis
       Flow.after(delay) {
         w {currentTimeMillis - t0 shouldBe delay +- 20l}
@@ -192,7 +183,7 @@ class SitesSpec extends Testing {
     import System.currentTimeMillis
     val channel = label[String]
 
-    runSite {
+    runProcess {
       val t0 = currentTimeMillis
       input(channel) { s => 
         w { fail("unexpected message received") }
@@ -212,20 +203,20 @@ class SitesSpec extends Testing {
     val channel = label[String]
     val N = 3
     
-    val a = siteProcess {
-      fanout(channel) { n => 
-        w { n shouldBe N }
-        done(w) 
-      }
-    }
-
-    val b = siteProcess { stop }
+    val a, b = createSite
 
     for( i <- 0 until N )
       a.connect(channel, b, channel, i)
 
     a.fanout(channel) shouldBe N
-    a.run()
+
+    a run process {
+      fanout(channel) { n => 
+        w { n shouldBe N }
+        done(w) 
+      }
+    }
+    
     w.await
   }
 
