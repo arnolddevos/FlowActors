@@ -11,34 +11,20 @@ trait Processes extends Flow {
 
     def andThen( other: Process) = 
       new Process {
-        def description = underlying.description
-        def action = underlying.action
-        override def followedBy = {
-          def rebuild(op: Option[Process]): Process = op match {
-            case Some(p) => 
-              new Process {
-                def description = p.description
-                def action = p.action
-                override def followedBy = Some(rebuild(p.followedBy))
-              }
-            case None => other
-          }
-          Some(rebuild(underlying.followedBy))
-        }
+        def description = s"${underlying.description} andThen ${other.description}"
+        def action = sequence(underlying.action)(other.action)
       }
 
     def !:( d: String ) = 
       new Process {
         def description = d
         def action = underlying.action
-        override def followedBy = underlying.followedBy
       }
 
     def *(factor: Int) = 
       new Process {
         def description = s"${underlying.description} * $factor"
         def action = fork(underlying, factor)(stop)
-        override def followedBy = underlying.followedBy
       }
   }
 

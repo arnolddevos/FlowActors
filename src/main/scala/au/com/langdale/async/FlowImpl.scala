@@ -8,7 +8,7 @@ trait FlowImpl extends Flow with Primitives with Queueing { this: Trace with Exe
 
   def createSite = new Site
 
-  case class Activation(process: Process)  
+  case class Activation(process: Process, stack: List[()=>Action])  
 
   final class Site extends SiteOps with PrimitiveActor { site =>
 
@@ -45,7 +45,8 @@ trait FlowImpl extends Flow with Primitives with Queueing { this: Trace with Exe
     /** inject an action into the site */
     def run(process: Process, instances: Int) = request { implicit t => 
       trace(site, "=>", "Run")
-      for( i <- 1 to instances) runStep( Activation(process), process.action )
+      val activation = Activation(process, Nil)
+      for( i <- 1 to instances) runStep( activation, process.action )
     }
 
     /** change buffering depth */  
@@ -75,6 +76,10 @@ trait FlowImpl extends Flow with Primitives with Queueing { this: Trace with Exe
   /** Create an output action */
   def output[Message]( label: OutputPort[Message], m: Message, n: Int)( step: => Action ): Action = 
     new OutputAction(label, n: Int, m)(step)
+
+  /** Perform actions one after the other */
+  def sequence(step1: => Action)(step2: => Action): Action =
+    new Sequence(step1, step2)
 
   /** create an action that depends on a port's fanout */
   def control(step: (Site, Process) => Action): Action = 
@@ -175,12 +180,19 @@ trait FlowImpl extends Flow with Primitives with Queueing { this: Trace with Exe
       site.runStep(activation, step(site, activation.process))
     }
   }
+
+  private class Sequence( step1: => Action, step2: => Action) extends Action {
+    private[FlowImpl] def dispatch(site: Site, activation: Activation)(implicit t: Task) = { 
+      site.runStep( Activation( activation.process, (() => step2) :: activation.stack), step1)
+    }
+  }
   
   private case class Stop() extends Action {
     private[FlowImpl] def dispatch(site: Site, activation: Activation)(implicit t: Task) { 
-      trace(site, activation.process, "=>", "Stop")
-      for( following <- activation.process.followedBy )
-        site.run(following)
+      activation match {
+        case Activation( process, next :: stack) => site.runStep( Activation(process, stack), next())
+        case Activation( process, Nil) => trace(site, process, "=>", "Stop")
+      }
     }
   }
 }

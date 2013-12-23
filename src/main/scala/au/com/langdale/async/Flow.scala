@@ -50,6 +50,9 @@ trait Flow extends Labels {
   def fanout[Message]( label: OutputPort[Message])(step: Int => Action): Action = 
     control { (site, _) => step(site.fanout(label)) }
 
+  /** Perform actions one after the other */
+  def sequence(step1: => Action)(step2: => Action): Action
+
   /** Fork a parallel process at this site */
   def fork( child: Process, instances: Int = 1 )( parent: => Action ): Action = 
     control { (site, _) => site.run(child, instances); parent }
