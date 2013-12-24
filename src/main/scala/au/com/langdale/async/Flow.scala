@@ -21,9 +21,6 @@ trait Flow extends Labels {
     /** document your process */
     def description: String
 
-    /** a process to be executed after this process */
-    def followedBy: Option[Process] = None
-
     override def toString = s"Process($description)"
   }
 
