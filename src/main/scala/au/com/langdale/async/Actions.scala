@@ -186,13 +186,21 @@ trait Actions { this: Flow with Processes =>
     def lift[U](cont: => Action[U]) = (y: Y) => output(port, y)(cont)
   }
 
-  // case class Offer[X](from: Site, port: Label[X])
+  class Offer[X](site: Site) {
+    val port = label[X]
 
-  // def propose[X]( step: Offer[X] => Action ): Action = control((site, _) => step(Offer(site, label[X])))
-  // def accept[X](offer: Offer[X])(step: => Action): Action = control { (site, _) =>
-  //   offer.from.connect(offer.port, site, offer.port)
-  //   step
-  // }
-  // def complete[X](offer: Offer[X]): Unit = offer.from.disconnect(offer.port)
+    def accept[U, V](step1: => Action[V])( step2: V => Action[U]): Action[U] = 
+      control { (dest, _) =>
+        site.connect(port, dest, port)
+        sequence(step1) { v => 
+          site.disconnect(port)
+          step2(v)
+        }
+      }
+  }
 
+  def offer[U, V, Y]( step1: Offer[Y] => Action[V] )( step2: V => Action[U]): Action[U] = 
+    control { (site, _) => 
+      sequence(step1(new Offer(site)))(step2)
+    }
 }
