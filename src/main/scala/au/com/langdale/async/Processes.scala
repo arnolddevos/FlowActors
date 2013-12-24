@@ -12,7 +12,7 @@ trait Processes extends Flow {
     def andThen( other: Process) = 
       new Process {
         def description = s"${underlying.description} andThen ${other.description}"
-        def action = sequence(underlying.action)(other.action)
+        def action = sequence(underlying.action)(_ => other.action)
       }
 
     def !:( d: String ) = 
@@ -24,11 +24,11 @@ trait Processes extends Flow {
     def *(factor: Int) = 
       new Process {
         def description = s"${underlying.description} * $factor"
-        def action = fork(underlying, factor)(stop)
+        def action = fork(underlying, factor)(stop(()))
       }
   }
 
-  def process(step: => Action) = new Process {
+  def process(step: => Action[_]) = new Process {
     def description = "anonymous"
     def action = step
   }
@@ -53,8 +53,8 @@ trait Processes extends Flow {
     def description = "default supervisor"
 
     def action = {
-      def loop: Action = input(errors) {
-        case (s, p, DeadLetters(gs, t)) => 
+      def loop: Action[Nothing] = input(errors) {
+        case Result(s, p, Left(DeadLetters(gs, t))) => 
           Console.err.println(s"$p failed with $t")
           if(! gs.isEmpty)
             Console.err.println(gs.mkString("\t", "\n\t", ""))
@@ -69,15 +69,15 @@ trait Processes extends Flow {
 
     def transfer(i: Int) = new Process {
       def description = s"balancer for $label($i)"
-      def action: Action = input(label) { m => 
+      def action: Action[Nothing] = input(label) { m => 
         output(label, m, i) { action }
       }
     }
 
     def action = fanout(label) { n => 
-      def loop(i: Int): Action = 
+      def loop(i: Int): Action[Unit] = 
         if(i < n) fork(transfer(i)) { loop(i+1) }
-        else stop
+        else stop(())
 
       loop(0)
     }
@@ -88,16 +88,16 @@ trait Processes extends Flow {
 
     def action = fanout(label) { n => 
      
-      def receive: Action = input(label) { m =>
+      def receive: Action[Nothing] = input(label) { m =>
         send(0, m)
       }
 
-      def send(i: Int, m: Message): Action =
+      def send(i: Int, m: Message): Action[Nothing] =
         if(i < n) output(label, m, i)(send(i+1, m))
         else receive
 
       if(n > 0) receive
-      else stop
+      else stop(())
     }
   }
 }

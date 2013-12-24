@@ -8,7 +8,7 @@ trait FlowImpl extends Flow with Primitives with Queueing { this: Trace with Exe
 
   def createSite = new Site
 
-  case class Activation(process: Process, stack: List[()=>Action])  
+  case class Activation(process: Process, stack: List[Any=>Action[_]])  
 
   final class Site extends SiteOps with PrimitiveActor { site =>
 
@@ -28,18 +28,17 @@ trait FlowImpl extends Flow with Primitives with Queueing { this: Trace with Exe
         }
       }
 
-    private[FlowImpl] def runStep( activation: Activation, step: => Action )(implicit t: Task) = spawn { implicit t => 
-      val a = try { 
+    private[FlowImpl] def runStep( activation: Activation, step: => Action[_] )(implicit t: Task) = spawn { implicit t => 
+      try { 
         trace(site, "=>", "Step")
-        step 
+        val a = step 
+        enqueue(implicit t => a.dispatch(this, activation))
       }
       catch { 
         case NonFatal(e) => 
           trace("error", site, activation.process, "uncaught exception", e)
-          output(errors, (this, activation.process, e), 0)(stop)
+          outputs(errors, 0) { outputs.transition(implicit t => Result(this, activation.process, Left(e)))}
       }
-      
-      enqueue(implicit t => a.dispatch(this, activation))
     } 
 
     /** inject an action into the site */
@@ -70,43 +69,43 @@ trait FlowImpl extends Flow with Primitives with Queueing { this: Trace with Exe
   }
 
   /** Create an input action */
-  def input[Message]( label: InputPort[Message])( step: Message => Action ): InputAction = 
+  def input[Message, U]( label: InputPort[Message])( step: Message => Action[U] ): InputAction[U] = 
     new SingleInputAction(label)(step)
 
   /** Create an output action */
-  def output[Message]( label: OutputPort[Message], m: Message, n: Int)( step: => Action ): Action = 
+  def output[Message, U]( label: OutputPort[Message], m: Message, n: Int)( step: => Action[U] ): Action[U] = 
     new OutputAction(label, n: Int, m)(step)
 
   /** Perform actions one after the other */
-  def sequence(step1: => Action)(step2: => Action): Action =
+  def sequence[U,V](step1: => Action[V])(step2: V => Action[U]): Action[U] =
     new Sequence(step1, step2)
 
   /** create an action that depends on a port's fanout */
-  def control(step: (Site, Process) => Action): Action = 
+  def control[U](step: (Site, Process) => Action[U]): Action[U] = 
     new Control(step)
 
   /** Continue after a delay or timeout an input operation. */
-  def after(millis: Long)(step: => Action): InputAction = 
+  def after[U](millis: Long)(step: => Action[U]): InputAction[U] = 
     new TimerAction(millis)(step)
 
   /** create a stop action */
-  def stop: Action = Stop()
+  def stop[U](u: U): Action[U] = Stop(u)
 
-  sealed trait Action {
+  sealed trait Action[+U] {
     private[FlowImpl] def dispatch(site: Site, activation: Activation)(implicit t: Task): Unit
   }
   
-  sealed trait InputAction extends Action with ActionCombinator {
-    def orElse( other: InputAction ): InputAction = new Alternatives(this, other)
+  sealed trait InputAction[+U] extends Action[U] with ActionCombinator[U] {
+    def orElse[V >: U]( other: InputAction[V] ): InputAction[V] = new Alternatives[V](this, other)
   }
 
-  private class OutputAction[Message]( label: OutputPort[Message], n: Int, m: Message)( step: => Action ) extends Action {
+  private class OutputAction[Message, U]( label: OutputPort[Message], n: Int, m: Message)( step: => Action[U] ) extends Action[U] {
     private[FlowImpl] def dispatch(site: Site, activation: Activation)(implicit t: Task) = { import site._
       outputs(label, n) { outputs.transition(implicit t => { runStep(activation, step); m })}
     }
   }
 
-  private trait BasicInputAction extends InputAction {
+  private trait BasicInputAction[U] extends InputAction[U] {
     private[FlowImpl] def dispatch(site: Site, activation: Activation)(implicit t: Task) = dispatchLater(site, activation, Cancellation { t => () })
     def dispatchLater(site: Site, activation: Activation, cancel: Cancellation)(implicit t: Task): Cancellation
     def dispatchNow(site: Site, activation: Activation)(implicit t: Task): Boolean
@@ -116,7 +115,7 @@ trait FlowImpl extends Flow with Primitives with Queueing { this: Trace with Exe
     def run( implicit t:Task) = f(t)
   }
 
-  private class SingleInputAction[Message]( label: InputPort[Message])( step: Message => Action ) extends BasicInputAction {
+  private class SingleInputAction[Message, U]( label: InputPort[Message])( step: Message => Action[U] ) extends BasicInputAction[U] {
       
     def dispatchLater(site: Site, activation: Activation, cancel: Cancellation)(implicit t: Task) = { import site._
       val id = new CancelRef
@@ -145,7 +144,7 @@ trait FlowImpl extends Flow with Primitives with Queueing { this: Trace with Exe
     }
   }
 
-  private class TimerAction(delay: Long)(step: => Action) extends BasicInputAction {
+  private class TimerAction[U](delay: Long)(step: => Action[U]) extends BasicInputAction[U] {
     def dispatchLater(site: Site, activation: Activation, cancel: Cancellation)(implicit t: Task) = {
       @volatile var cancelled = false
       val event = timer.after(delay) { site.enqueue { implicit t => if(!cancelled) { cancel.run; site.runStep( activation, step)}}}
@@ -154,11 +153,11 @@ trait FlowImpl extends Flow with Primitives with Queueing { this: Trace with Exe
     def dispatchNow(site: Site, activation: Activation)(implicit t: Task) = false
   }
   
-  private case class Alternatives(a1: InputAction, a2: InputAction) extends InputAction {
+  private case class Alternatives[U](a1: InputAction[U], a2: InputAction[U]) extends InputAction[U] {
     
-    final def toList: List[BasicInputAction] = {
-      def gather(a: InputAction): List[BasicInputAction] = a match {
-        case a: BasicInputAction => List(a)
+    final def toList: List[BasicInputAction[U]] = {
+      def gather(a: InputAction[U]): List[BasicInputAction[U]] = a match {
+        case a: BasicInputAction[U] => List(a)
         case Alternatives(a1, a2) => gather(a2) ::: gather(a1)
       }
       gather(this)
@@ -175,23 +174,26 @@ trait FlowImpl extends Flow with Primitives with Queueing { this: Trace with Exe
     }
   }
 
-  private class Control( step: (Site, Process) => Action ) extends Action {
+  private class Control[U]( step: (Site, Process) => Action[U] ) extends Action[U] {
     private[FlowImpl] def dispatch(site: Site, activation: Activation)(implicit t: Task) = { 
       site.runStep(activation, step(site, activation.process))
     }
   }
 
-  private class Sequence( step1: => Action, step2: => Action) extends Action {
+  private class Sequence[U,V]( step1: => Action[V], step2: V => Action[U]) extends Action[U] {
     private[FlowImpl] def dispatch(site: Site, activation: Activation)(implicit t: Task) = { 
-      site.runStep( Activation( activation.process, (() => step2) :: activation.stack), step1)
+      site.runStep( Activation( activation.process, (step2.asInstanceOf[Any=>Action[_]]) :: activation.stack), step1)
     }
   }
   
-  private case class Stop() extends Action {
-    private[FlowImpl] def dispatch(site: Site, activation: Activation)(implicit t: Task) { 
+  private case class Stop[U](u: U) extends Action[U] {
+    private[FlowImpl] def dispatch(site: Site, activation: Activation)(implicit t: Task) { import site._
       activation match {
-        case Activation( process, next :: stack) => site.runStep( Activation(process, stack), next())
-        case Activation( process, Nil) => trace(site, process, "=>", "Stop")
+        case Activation( process, next :: stack) => 
+          runStep( Activation(process, stack), next(u))
+        case Activation( process, Nil) => 
+          trace(site, process, "=>", "Stop")
+          outputs(errors, 0) { outputs.transition(implicit t => Result(site, process, Right(u)))}
       }
     }
   }

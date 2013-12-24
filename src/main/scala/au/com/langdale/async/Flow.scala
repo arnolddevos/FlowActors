@@ -16,7 +16,7 @@ trait Flow extends Labels {
   trait Process {
 
     /** the initial step of this process */
-    def action: Action 
+    def action: Action[Any] 
 
     /** document your process */
     def description: String
@@ -28,40 +28,40 @@ trait Flow extends Labels {
   }
 
   /** A continuation, a series of which form a process */
-  type Action 
+  type Action[+U] 
 
   /** Actions that receive input can be combined */
-  type InputAction <: Action with ActionCombinator
+  type InputAction[+U] <: Action[U] with ActionCombinator[U]
 
-  trait ActionCombinator {
-    def orElse( alt: InputAction): InputAction
+  trait ActionCombinator[+U] {
+    def orElse[V >: U]( alt: InputAction[V]): InputAction[V]
   }
 
   /** Create an input action */
-  def input[Message]( label: InputPort[Message])( step: Message => Action ): InputAction
+  def input[Message, U]( label: InputPort[Message])( step: Message => Action[U] ): InputAction[U]
 
   /** Create an output action */
-  def output[Message]( label: OutputPort[Message], m: Message, n: Int = 0)( step: => Action ): Action 
+  def output[Message, U]( label: OutputPort[Message], m: Message, n: Int = 0)( step: => Action[U] ): Action[U] 
 
   /** Create an action that depends on the site */
-  def control(step: (Site, Process) => Action): Action
+  def control[U](step: (Site, Process) => Action[U]): Action[U]
 
   /** Create an action that depends on the fanout of a port */
-  def fanout[Message]( label: OutputPort[Message])(step: Int => Action): Action = 
+  def fanout[Message, U]( label: OutputPort[Message])(step: Int => Action[U]): Action[U] = 
     control { (site, _) => step(site.fanout(label)) }
 
   /** Perform actions one after the other */
-  def sequence(step1: => Action)(step2: => Action): Action
+  def sequence[U,V](step1: => Action[V])(step2: V => Action[U]): Action[U]
 
   /** Fork a parallel process at this site */
-  def fork( child: Process, instances: Int = 1 )( parent: => Action ): Action = 
+  def fork[U]( child: Process, instances: Int = 1 )( parent: => Action[U] ): Action[U] = 
     control { (site, _) => site.run(child, instances); parent }
 
   /** Continue after a delay or timeout an input operation. */
-  def after(millis: Long)(step: => Action): InputAction
+  def after[U](millis: Long)(step: => Action[U]): InputAction[U]
 
   /** A no-op wih no continuation */
-  def stop: Action
+  def stop[U](u: U): Action[U]
 
   /** A site at which processes run, messages are received and sent. */
   type Site <: SiteOps
@@ -87,8 +87,11 @@ trait Flow extends Labels {
   /** Create a Site */
   def createSite: Site
 
+  /** The result of a process or the reason for its termination */
+  case class Result(site: Site, process: Process, value: Either[Throwable, Any])
+  
   /** The port label for errors and supervision */
-  val errors = label[(Site, Process, Throwable)]
+  val errors = label[Result]
 }
 
 object Flow extends Processes with Actions with Builder with GraphDSL with Labels.Basic with FlowImpl with Executor.ForkJoin with Trace.Noop {
