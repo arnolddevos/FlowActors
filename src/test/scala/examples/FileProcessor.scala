@@ -7,9 +7,11 @@ trait Problem {
 
   implicit val lines = label[Line]
   implicit val docs  = label[Document]
-  val reader, parser, writer: Process
+  val reader, parser, balance, writer: Process
 
-  val graph = reader :- lines :-> parser :- docs :-> writer
+  val N: Int // ratio of read speed to write speed
+
+  def graph = reader :- lines :-> parser :- docs :-> balance :- docs :-> writer * N
 }
 
 trait Solution extends Problem {
@@ -19,44 +21,46 @@ trait Solution extends Problem {
   val inputFileName: String
 
   type Line = Option[String]
-  case class Document(name: String, content: Offer[Line])
+  case class Document(name: String, content: Seq[String])
 
-  val reader = produce {
+  val reader = "raw text reader" !: produce {
     def packetize( it: Iterator[String]) = it.map(Some(_)) ++ Iterator(None)
+
     for(l <- packetize(Source.fromFile(inputFileName).getLines))
-    yield l
+      yield l
   } 
 
-  val writer = transform[Document => Process] { doc =>
+  val writer = "document writer" !: consume { doc: Document =>
     val o = new PrintWriter(new File(doc.name))
-
-    consumeFrom(doc.content.port) {
-      case Some(l) => o.println(l)
-      case None    => complete(doc.content); o.close
-    }
+    o.println(doc.content.mkString("\n"))
+    o.close
   }
 
   val parser = "line by line parser" !: process {
 
-    val Header  = "".r
-    val Trailer = "".r
+    val Header  = """BEGIN (\w+)""".r
+    val Trailer = """END (\d+)""".r
 
-    def start: Action = input(lines) {
+    def start: Action[Unit] = input(lines) {
       case Some(Header(name)) => 
-        propose[Line] { offer =>
-          val doc = Document(name, offer)
-          output(docs, doc) { body(doc, 0) }
-        }
-      case None => stop
+        body(Document(name, Seq()))
+
+      case None => stop(())
     }
 
-    def body(doc: Document, count: Int): Action = input(lines) {
-      case Some(Trailer(n)) if n.toInt == count => output(doc.content.port, None) { start }
-      case line @ Some(_) => output(doc.content.port, line) { body(doc, count+1) }
+    def body(doc: Document): Action[Unit] = input(lines) {
+      case Some(Trailer(n)) if n.toInt == doc.content.size => 
+        output(docs, doc) { start }
+
+      case Some(text) => 
+        body(doc.copy(content=doc.content:+ text))
     }
 
     start
   }
+
+  val N = 3
+  val balance = "output load balancer" !: balancer(docs)
 }
 
 object Main {

@@ -4,7 +4,7 @@ import au.com.langdale.async.Flow.{Debug => Flow}
 
 abstract class Testing extends FlatSpec with Matchers with concurrent.AsyncAssertions {
 
-  def runProcess(step: => Action) = {
+  def runProcess[U](step: => Action[U]) = {
     val s = createSite
     s.run(process(step))
     s
@@ -12,7 +12,7 @@ abstract class Testing extends FlatSpec with Matchers with concurrent.AsyncAsser
 
   def done( w: Waiter) = {  
     w.dismiss
-    stop
+    stop(())
   }
 }
 
@@ -105,7 +105,7 @@ class SitesSpec extends Testing {
     }
 
     val b = runProcess {
-      def loop: Action = 
+      def loop: Action[Nothing] = 
         input(chan1) { s => 
           w { s shouldBe m1 }
           w.dismiss
@@ -144,7 +144,7 @@ class SitesSpec extends Testing {
     }
 
     val b = runProcess {
-      def loop: Action = 
+      def loop: Action[Nothing] = 
         input(chan1) { s1 => 
           input(chan2) { s2 => 
             w { s1 shouldBe m1 }
@@ -187,7 +187,7 @@ class SitesSpec extends Testing {
       val t0 = currentTimeMillis
       input(channel) { s => 
         w { fail("unexpected message received") }
-        stop
+        stop(())
       } orElse
       Flow.after(delay) {
         w {currentTimeMillis - t0 shouldBe delay +- 20l}

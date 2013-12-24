@@ -23,7 +23,7 @@ object ExampleSystem extends Processes with Builder with GraphDSL with Labels.Ba
 
       def action = loop
 
-      def loop: Action = input(data) { i =>
+      def loop: Action[Nothing] = input(data) { i =>
 
         def converted = 
           if( i < 100) log10(100.0-i) 
@@ -40,13 +40,13 @@ object ExampleSystem extends Processes with Builder with GraphDSL with Labels.Ba
      
       def action = loop(0)
 
-      def loop(i: Int): Action = {
+      def loop(i: Int): Action[Unit] = {
         println("// generating " + i)
         output(data, i) {
           if(i < 400)
             loop(i+1)
           else {
-            stop
+            stop(())
           }
         }
       }
@@ -58,7 +58,7 @@ object ExampleSystem extends Processes with Builder with GraphDSL with Labels.Ba
 
       def action = loop
 
-      def loop: Action = input(logging) {
+      def loop: Action[Nothing] = input(logging) {
         t => println("// " + t)
         loop
       }
