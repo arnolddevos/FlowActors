@@ -126,7 +126,7 @@ trait Queueing { this: Trace =>
       case Backlog(p, q) => 
         Backlog(p, q enqueue mk)
       case s @ Waiters(_) =>
-        trace("error", "inconsistent state", s); s
+        crash("inconsistent state", s)
     }
 
     def transition[Message](h: CancelRef)(km: KM[Message])(implicit t: Task): Transition[Message] = {
@@ -150,11 +150,15 @@ trait Queueing { this: Trace =>
         transfer(km, m)
         if(p.length == 1) Ready(p.head) else Backlog(p, Queue.empty) 
       case s @ Backlog(_, _) => 
-        sys.error("inconsistent state " + s)
+        crash("inconsistent state", s)
     }
           
     def cancel[Message](h: CancelRef)(implicit t: Task): Transition[Message] = {
       case State(qs, d) => State( cancel(qs)(h), d)
+    }
+
+    def transitionMaybe[Message](km: KM[Message])(implicit t: Task): PartialFunction[State[Message], State[Message]] = {
+      case s @ State(qs @ (Ready(_)|Backlog(_,_)), d) => State( recv(qs)(new CancelRef, km), d)
     }
 
     private def cancel[Message]( qs: QState[Message])(h: CancelRef)(implicit t: Task): QState[Message] = qs match {
@@ -165,10 +169,6 @@ trait Queueing { this: Trace =>
       case s => s
     }
 
-    def transitionMaybe[Message](km: KM[Message])(implicit t: Task): PartialFunction[State[Message], State[Message]] = {
-      case s @ State(qs @ (Ready(_)|Backlog(_,_)), d) => State( recv(qs)(null, km), d)
-    }
-  
     def transition[Message](n: Int)(implicit t: Task): Transition[Message] = {
       case State(qs, _) =>
         def unroll(qs: QState[Message], n: Int): QState[Message] = qs match {

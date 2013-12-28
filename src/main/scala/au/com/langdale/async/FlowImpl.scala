@@ -42,28 +42,28 @@ trait FlowImpl extends Flow with Primitives with Queueing { this: Trace with Exe
     } 
 
     /** inject an action into the site */
-    def run(process: Process, instances: Int) = request { implicit t => 
+    def run(process: Process, instances: Int) = enqueue { implicit t => 
       trace(site, "=>", "Run")
       val activation = Activation(process, Nil)
       for( i <- 1 to instances) runStep( activation, process.action )
-    }
+    } (externalTask)
 
     /** change buffering depth */  
-    def buffer[Message]( label: InputPort[Message], depth: Int): Unit = request { implicit t =>
+    def buffer[Message]( label: InputPort[Message], depth: Int): Unit = enqueue { implicit t =>
       inputs(label) { inputs.transition(depth) }
-    }
+    } (externalTask)
 
     /** Connect an output port to an input port */
     def connect[Message]( labelA: OutputPort[Message], siteB: Site, labelB: InputPort[Message], n: Int): Unit = {
-      request { implicit t =>
+      enqueue { implicit t =>
         outputs(labelA, n) { outputs.transition( siteB.connection(labelB)) }
-      }
+      } (externalTask)
     }
 
     /** disconnect an output */
-    def disconnect[Message](label: OutputPort[Message], n: Int): Unit = request { implicit t =>
+    def disconnect[Message](label: OutputPort[Message], n: Int): Unit = enqueue { implicit t =>
       outputs(label, n) { outputs.transition[Message]() }
-    }
+    } (externalTask)
 
     def fanout[Message](label: OutputPort[Message]): Int = outputs.keys.filter( _._1 == label ).size
   }

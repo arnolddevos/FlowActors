@@ -7,6 +7,10 @@ import scala.util.control.NonFatal
 
 trait Primitives { this: Trace with Executor =>
   
+  private [async] final val externalTask = task(0, 0)  
+  private val barrier = List((t: Task) => ())
+  private val actorCount = new AtomicInteger
+  
   class CheckedVar[V](v0: V) {
     private val vr = new AtomicReference[V](v0)
     
@@ -20,10 +24,6 @@ trait Primitives { this: Trace with Executor =>
     }
   }
 
-  private val barrier = List((t: Task) => ())
-  private [async] final val externalTask = task(0, 0)  
-  private val actorCount = new AtomicInteger
-  
   trait PrimitiveActor { actor =>
     private val taskCount = new AtomicInteger
     
@@ -76,9 +76,7 @@ trait Primitives { this: Trace with Executor =>
           }
       }
     }
-    
-    def request( k: Task => Unit ): Unit = enqueue(k)(externalTask)
-    
+      
     def spawn[W]( k: Task => Unit )(implicit t: Task): Task = { 
       val child = task(actorId, taskCount.incrementAndGet)
       trace("forks", child)
