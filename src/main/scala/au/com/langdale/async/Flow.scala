@@ -91,6 +91,6 @@ trait Flow extends Labels {
   val errors = label[Result]
 }
 
-object Flow extends Processes with Actions with Builder with GraphDSL with Labels.Basic with FlowImpl with Executor.ForkJoin with Trace.Noop {
-  object Debug extends Processes with Actions with Builder with GraphDSL with Labels.Basic with FlowImpl with Executor.ForkJoin with Trace.Flat
+object Flow extends Processes with Actions with Continuations with Builder with GraphDSL with Labels.Basic with FlowImpl with Executor.ForkJoin with Trace.Noop {
+  object Debug extends Processes with Actions with Continuations with Builder with GraphDSL with Labels.Basic with FlowImpl with Executor.ForkJoin with Trace.Flat
 }
