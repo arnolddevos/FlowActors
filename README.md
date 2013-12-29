@@ -1,9 +1,11 @@
 # Flowlib: Another Scala Dataflow Library
 
 Important Caveats:
-: This an experimental library for now.   I hope to have something well-proven soon.  
-: This page is in draft form until I test my examples and post more complete example code.
-: The source is [on github](https://github.com/arnolddevos/FlowActors) but the repository will likely be renamed to remove the reference to actors.
+* This an experimental library for now.   I hope to have something well-proven soon.  
+* This page is in draft form until I test my examples and post more complete example code.
+* The source is [on github](https://github.com/arnolddevos/FlowActors) but the repository will likely be renamed to remove the reference to actors.
+* Updated 29/12/2013 to reflect API changes: a type parameter for `Action`; `Supervisor` parameter for `run()`; 
+`(p: Process) * (n: Int) == p*n` no longer holds.
 
 _Flowlib_ is a compact library for asynchronous programming within a single JVM.
 
@@ -24,22 +26,20 @@ import au.com.langdale.async.Flow._
 
 trait SampleGraph extends SampleDecls { 
 
-  val N = 4
-  val M = 2
+  val N = 2
 
   def graph =
-    InitialData :- urls :-> Fetcher*N :- raw :-> Splitter -: ( 
-  	  urls ->: Dedup -: urls ->: Fetcher*N & 
-  	  text ->: Filer*M -: metrics ->: Reporter ) &
-    (Fetcher & Splitter & Dedup & Filer & Reporter) :- errors :-> Supervisor
+    InitialData :- urls :-> Fetcher :- raw :-> Splitter -: ( 
+  	  urls ->: Dedup -: urls ->: Fetcher & 
+  	  text ->: Filer*N -: metrics ->: Reporter )
 }
 ```
 
 Uppercase identifiers such as `Fetcher` by convention are processes.  Lowercase identifiers such as `raw` are labels for message flows.
 
-The connecting operators `:-` and `:->` respectively attach a flow label to a process forming a _projection_ and then connect it to a target process. 
+The connecting operator `:-` attaches a flow label to a process forming a _projection_ and `:->` connects this to a target process. 
 
-These have right associative equivalents `->:` and `-:` which are useful to express fan-out as opposed to fan-in sub-graphs. 
+These have right associative equivalents `->:` and `-:` respectively, which are useful to express fan-out as opposed to fan-in structures. 
 
 The `&` operator combines graphs or projections. More about the representation of graphs and projections later.
 
@@ -71,7 +71,7 @@ trait SampleProcesses  {
   
     def action = loop(Set.empty)
   
-    private def loop(seen: Set[Message]): Action =
+    private def loop(seen: Set[Message]): Action[Nothing] =
       input(flow) { message => 
       	if(seen contains message) loop(seen)
       	else output(flow, message) { loop(seen + message) }
@@ -104,6 +104,13 @@ output port labelled `flow`.
 * The passed block is a continuation that is 
 invoked when the `output` action is dispatched.
 
+* `Action` has a type parameter, in this case 
+`Nothing`, which indicates that this series of actions
+loops indefinitely.  
+
+Any other type `U` indicates that a `stop(u: U)` action 
+may be encountered which terminates a series of actions. 
+
 ## A Note About Process State
 
 The dedup process must keep track of the messages already seen
@@ -133,7 +140,7 @@ object Sample extends SampleGraph with SampleProcesses  {
 
   // commit the remaining types and processes here ...
 
-  val procmap = run(graph)
+  val procmap = run(graph, Supervisor)
 
   println(s"Started ${procmap.size} processes!")
 }
@@ -143,8 +150,11 @@ This fills in the `Address` type and creates a `Dedup` process
 whose input and output will be given the `urls` label. 
 (The remaining types and processes are omitted for brevity.)
 
-The `run(graph)` method puts everything in motion.  First, a network of _sites_ 
+The `run(graph, Supervisor)` method puts everything in motion.  A network of _sites_ 
 connected by communication channels is created that mirrors the passed graph. 
-Then the corresponding process from the graph is executed at each site.  
+The corresponding process from the graph is executed at each site.  
+
+The given `Supervisor` process is also executed.  It is connected to the prefined _errors_ 
+port of all the other processes and receives messages on errors or process termination. 
 
 The run method returns a map of processes to the sites at which they are executing.   
