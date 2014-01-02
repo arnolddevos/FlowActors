@@ -1,12 +1,5 @@
 # Flowlib: Another Scala Dataflow Library
 
-Important Caveats:
-* This an experimental library for now.   I hope to have something well-proven soon.  
-* This page is in draft form until I test my examples and post more complete example code.
-* The source is [on github](https://github.com/arnolddevos/FlowActors) but the repository will likely be renamed to remove the reference to actors.
-* Updated 29/12/2013 to reflect API changes: a type parameter for `Action`; `Supervisor` parameter for `run()`; 
-`(p: Process) * (n: Int) == p*n` no longer holds.
-
 _Flowlib_ is a compact library for asynchronous programming within a single JVM.
 
 * Compared to futures and promises, flowlib has a message passing model and allows arbitrary message processing graphs. There is a DSL to describe these graphs and operators to split and join message flows in sum or product style.  The degree of concurrency is tune-able at each processing node.
@@ -16,6 +9,14 @@ _Flowlib_ is a compact library for asynchronous programming within a single JVM.
 * Compared to Spark, Storm or Akka clusters, flowlib is for smaller asynchronous systems.  There are many of these! 
 
 * Compared to Functional Reactive Programming, there is no global synchronization of messages flows (signals and behaviours in FRP) nor any other glitch suppression strategy.  
+
+Important Caveats:
+
+* This an experimental library for now.   I hope to have something well-proven soon.  
+* This page is in draft form until I test my examples and post more complete example code.
+* The source is [on github](https://github.com/arnolddevos/FlowActors) but the repository will likely be renamed to remove the reference to actors.
+* Updated 29/12/2013 to reflect API changes: a type parameter for `Action`; `Supervisor` parameter for `run()`; 
+`(p: Process) * (n: Int) == p*n` no longer holds.
 
 ## Without Further Ado: A Graph
 
