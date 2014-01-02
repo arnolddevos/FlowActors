@@ -1,8 +1,8 @@
 package examples
 import au.com.langdale.async._
+import Flow._
 
 object ContinuationsExample {
-  import Flow._
 
   implicit val strings = label[String]
 
@@ -27,4 +27,18 @@ object ContinuationsExample {
   val p1 = processC(passOneMessage(()))
   val p2 = processC(passTwoMessages)
 
+}
+
+object AccumulatorMonadic {
+
+  val increment, accumulation = label[Int]
+  val accumulator = processC(loop(0))
+
+  def loop(value: Int): Conclusion[Nothing] =
+    for {
+      _      <- outputC[Nothing, Int](value)(accumulation)
+      amount <- inputC[Nothing, Int](increment)
+      action <- loop(value + amount)
+    }
+    yield action
 }

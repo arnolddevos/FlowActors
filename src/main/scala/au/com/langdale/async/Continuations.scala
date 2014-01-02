@@ -63,7 +63,9 @@ trait Continuations { this: Flow with Processes =>
     continuation(f)
   }
 
-  def processC[U]( c: Continuation[Action[U], Action[U]]) = process {
+  type Conclusion[U] = Continuation[Action[U], Action[U]]
+
+  def processC[U]( c: Conclusion[U]) = process {
     c.run(identity)
   }
 }
