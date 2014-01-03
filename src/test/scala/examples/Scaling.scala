@@ -50,6 +50,38 @@ object ScalingAkkaStyle {
   }
 }
 
+object ScalingAkkaBecomesStyle {
+  // this is scala + Akka
+  import akka.actor._
+
+  val system = ActorSystem("SimpleSystem")
+  def scaling(downstream: ActorRef) = system.actorOf(Props(new Scaling(downstream)))
+
+  case class ScaleFactor(factor: Double)
+  case class Measurement(value: Double)
+  case class ScaledMeasurement(value: Double)
+
+  class Scaling(downstream: ActorRef) extends Actor with Stash {
+    def receive = {
+      case ScaleFactor(f) =>
+        context.become(loop(f))
+        unstashAll()
+
+      case _: Measurement =>
+        stash()
+    }
+
+    def loop(f: Double): Receive = {
+      case ScaleFactor(fNext) => 
+        context.become(loop(fNext))
+
+      case Measurement(m) => 
+        downstream ! ScaledMeasurement(m * f)
+    }
+  }
+}
+
+
 object ScalingOriginalStyle {
 
   // this is scala + original actors
